@@ -12,7 +12,7 @@ A simple schematic of the tool from an author’s perspective is depicted below.
 Anno-REP empowers authors to create and curate their own web-based annotations at any point in the writing process; signal the motivation for those annotations; enhance their interpretability; and publish those annotations on a web page in tandem with the scholarly work that they accompany. As such, Anno-REP will facilitate ATI’s seamless integration into writing and publishing processes. This will empower more authors to more easily generate and share annotations, significantly increasing the openness, comprehensibility and evaluability of their qualitative and multi-method research. Anno-REP’s development also augments ATI’s intellectual impact, both minimizing disruption to, and actively supporting, the writing process. Authors who use Anno-REP can still employ their preferred text editing software. Moreover, creating and labeling annotations while writing can enhance the creative process, just as linking in and documenting underlying data while writing may help authors to replace ad-hoc practices. 
 
 
-![The Anno-REP Workflow from an Author’s Perspective](/docs/images/annoREP-figure.png)
+![The Anno-REP Workflow from an Author’s Perspective](images/annoREP-figure.png)
 
 From a technical standpoint, the specific functions that Anno-REP will carry out include: 
 - Extract annotations from a manuscript that was written using a text editor (e.g., in Word, LibreOffice, LaTeX, etc.);
