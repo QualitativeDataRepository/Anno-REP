@@ -1,5 +1,5 @@
 # A Tool to Restructure, Edit, and Package Annotations (Anno-REP)
-We are building an open-source, web-based tool, Anno-REP, that will help facilitation [Annotation for Transprent Inquiry (ATI)](https:/qdr.syr.edu/ati) and other annotation-based workflows.. 
+We are building an open-source, web-based tool, Anno-REP, that will help facilitation [Annotation for Transprent Inquiry (ATI)](https://qdr.syr.edu/ati) and other annotation-based workflows.. 
 
 By helping authors to overcome most practical dilemmas related to using ATI, Anno-REP will maximize ATI’s efficiency and effectiveness. Specifically, from an author’s standpoint, Anno-REP will:  
 Allow the creation, preview, and editing of annotations in a native authoring environment;
