@@ -30,10 +30,13 @@ public class DatasetCommand implements Runnable {
     @Parameters(index = "1", description = "The DOI of the Dataset.")
     protected String doi;
     
+    @Option(names = {"-r", "--refresh"}, description = "Refresh cached information from server")
+    private boolean refresh = false;
+    
     public void run() {
         
         DataverseServer dvs = DataverseServer.getServerFor(url);
-        Dataset d = Dataset.getDataset(dvs, doi);
+        Dataset d = Dataset.getDataset(dvs, doi, refresh);
         System.out.println(d.getMetadata().getString("Title"));
         StringWriter sw = new StringWriter();
         Map<String, Object> map = new HashMap<>();
@@ -41,8 +44,22 @@ public class DatasetCommand implements Runnable {
         JsonWriterFactory writerFactory = Json.createWriterFactory(map);
         JsonWriter jsonWriter = writerFactory.createWriter(sw);
         jsonWriter.writeObject(d.getMetadata());
-        jsonWriter.close();
+        jsonWriter = writerFactory.createWriter(sw);
         System.out.println(sw.toString());
+    }
+
+    @Command(name = "listFiles", description = "List files in the dataset") 
+    void listFiles(
+            @Parameters(paramLabel = "<folder>",defaultValue =  "\\",
+            description = "top folder to display") String folder) {
+        DataverseServer dvs = DataverseServer.getServerFor(url);
+        Dataset d = Dataset.getDataset(dvs, doi, refresh);
+
+        for(String s: d.getFileListing()) {
+            if(s.startsWith(folder)) {
+                System.out.println(s);
+            }
+        }
     }
 
     public static void main(String[] args) {

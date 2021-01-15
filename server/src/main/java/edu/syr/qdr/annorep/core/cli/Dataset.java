@@ -9,6 +9,8 @@ import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Level;
@@ -18,6 +20,7 @@ import javax.json.Json;
 import javax.json.JsonArray;
 import javax.json.JsonObject;
 import javax.json.JsonReader;
+import javax.json.JsonValue;
 import javax.json.JsonWriter;
 import javax.json.JsonWriterFactory;
 import javax.json.stream.JsonGenerator;
@@ -36,6 +39,7 @@ import picocli.CommandLine.Parameters;
 public class Dataset {
 
     private static final Logger logger = Logger.getLogger(DatasetCommand.class.getCanonicalName());
+    public static String pathSep = System.getProperty("file.separator");
 
     private JsonObject metadata = null;
     private JsonArray files = null;
@@ -106,6 +110,36 @@ public class Dataset {
 
     public JsonArray getFiles() {
         return files;
+    }
+
+    public ArrayList<String> getFileListing() {
+        ArrayList<String> fileList = new ArrayList<String>();
+        for (JsonValue f : files) {
+            JsonObject fo = f.asJsonObject();
+            String name = fo.getString("schema:name");
+            String dirPath = fo.getString("dvcore:directoryLabel", "");
+            if (dirPath.length() == 0) {
+                dirPath = pathSep;
+            } else {
+                dirPath = pathSep + dirPath + pathSep;
+            }
+            fileList.add(dirPath + name);
+        }
+        fileList.sort(new Comparator<String>() {
+            public int compare(String s1, String s2) {
+                Path p1 = Paths.get(s1);
+                Path p2 = Paths.get(s2);
+                int depth1 = p1.getNameCount();
+                int depth2 = p2.getNameCount();
+                if (depth1 != depth2) {
+                    return (depth1 > depth2) ? 1 : -1;
+                } else {
+                    return p1.compareTo(p2);
+                }
+            }
+        });
+        return fileList;
+
     }
 
 }
