@@ -11,7 +11,7 @@ import javax.json.JsonWriterFactory;
 import javax.json.stream.JsonGenerator;
 
 import edu.syr.qdr.annorep.core.Dataset;
-import edu.syr.qdr.annorep.core.DataverseServer;
+import edu.syr.qdr.annorep.core.DataverseService;
 import edu.syr.qdr.annorep.core.User;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -24,7 +24,7 @@ public class DatasetCommand implements Runnable {
     public DatasetCommand() {
     }
 
-    private DataverseServer dvs;
+    private DataverseService dvs;
     private Dataset d;
 
     @Parameters(index = "0", description = "The Dataverse Server URL")
@@ -92,7 +92,7 @@ public class DatasetCommand implements Runnable {
         if (apiKey != null) {
             u = new User(apiKey);
         }
-        dvs = DataverseServer.getServerFor(url, u);
+        dvs = DataverseService.getServerFor(url, u);
         d = Dataset.getDataset(dvs, doi, refresh);
     }
 

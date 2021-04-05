@@ -34,29 +34,29 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 
-public class DataverseServer {
+public class DataverseService {
 
-    private static final Logger logger = Logger.getLogger(DataverseServer.class.getCanonicalName());
+    private static final Logger logger = Logger.getLogger(DataverseService.class.getCanonicalName());
 
     private String url = null;
     private CloseableHttpClient httpClient = null;
     private User user;
 
-    private static Map<String, DataverseServer> dsm = new HashMap<String, DataverseServer>();
+    private static Map<String, DataverseService> dsm = new HashMap<String, DataverseService>();
 
-    public static DataverseServer getServerFor(String url, User u) {
+    public static DataverseService getServerFor(String url, User u) {
         String lookupKey = url;
         if (u != null) {
             lookupKey = lookupKey + u.getApiKey();
         }
         if (!dsm.containsKey(lookupKey)) {
-            DataverseServer dvs = new DataverseServer(url, u);
+            DataverseService dvs = new DataverseService(url, u);
             dsm.put(lookupKey, dvs);
         }
         return dsm.get(lookupKey);
     }
 
-    private DataverseServer(String serverUrl, User u) {
+    private DataverseService(String serverUrl, User u) {
         url = serverUrl;
         user = u;
     }

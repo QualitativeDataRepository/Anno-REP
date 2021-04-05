@@ -49,20 +49,20 @@ public class Dataset {
     private JsonArray files = null;
     // Convenience - keep DOI - it's also in the metadata
     private String doi;
-    private DataverseServer dvS;
+    private DataverseService dvS;
 
-    public Dataset(DataverseServer dvs, String doi, JsonObject md, JsonArray files) {
+    public Dataset(DataverseService dvs, String doi, JsonObject md, JsonArray files) {
         this.dvS = dvs;
         this.doi = doi;
         this.files = files;
         this.metadata = md;
     }
 
-    public static Dataset getDataset(DataverseServer dvs, String doi) {
+    public static Dataset getDataset(DataverseService dvs, String doi) {
         return getDataset(dvs, doi, false);
     }
 
-    public static Dataset getDataset(DataverseServer dvs, String doi, boolean refreshCache) {
+    public static Dataset getDataset(DataverseService dvs, String doi, boolean refreshCache) {
         Path mdPath = Paths.get("tmp/" + dvs.getPath() + "/" + doi.replaceAll("[:/]", "_") + ".json");
         Path filesPath = Paths.get("tmp/" + dvs.getPath() + "/" + doi.replaceAll("[:/]", "_") + ".files.json");
         Dataset d = null;
