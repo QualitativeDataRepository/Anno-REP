@@ -12,4 +12,7 @@ public class Documents {
 	@Id
 	@Column
     private long id;
+	
+	@Column 
+	private boolean converted; 
 }

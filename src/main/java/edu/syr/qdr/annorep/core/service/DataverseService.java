@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import javax.json.Json;
+import javax.json.JsonArray;
 import javax.json.JsonObject;
 import javax.json.JsonReader;
 
@@ -61,6 +62,27 @@ public class DataverseService {
             }
             JsonReader r = Json.createReader(new StringReader(data));
             return r.readObject();
+        } catch (IOException ioe) {
+            log.error("IOException getting url", ioe);
+            throw new Exception("IOException getting url", ioe);
+        }
+
+    }
+
+    public JsonArray getAPIJsonArrayResponse(String apiPath, String apikey) throws Exception {
+        log.info("Getting: " + apiPath);
+        HttpGet httpGet = new HttpGet(url + apiPath);
+        if (apikey != null) {
+            httpGet.addHeader("X-Dataverse-key", apikey);
+        }
+        try {
+            CloseableHttpResponse response = getHttpClient().execute(httpGet);
+            String data = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+            if (response.getStatusLine().getStatusCode() != 200) {
+                throw new Exception("Response code: " + response.getStatusLine().getStatusCode() + ", " + data);
+            }
+            JsonReader r = Json.createReader(new StringReader(data));
+            return r.readArray();
         } catch (IOException ioe) {
             log.error("IOException getting url", ioe);
             throw new Exception("IOException getting url", ioe);
@@ -207,10 +229,6 @@ public class DataverseService {
         return false;
     }
 
-    public boolean ping() {
-        return true;
-    }
-
     public JsonObject addAuxiliaryFile(Long id, InputStream is, ContentType cType, String origin, boolean isPublic, String formatTag, String formatVersion, String apikey) {
         HttpPost httpPost = new HttpPost(url + "/api/access/datafile/" + id + "/metadata/" + formatTag + "/" + formatVersion);
         if (apikey != null) {
@@ -244,7 +262,7 @@ public class DataverseService {
                 return r.readObject();
             } else {
                 // An error and unlikely that we can recover, so report and move on.
-                log.error("Error response when processing aux file: "
+                log.error("Error response when processing aux file: " + formatTag + "/" + formatVersion + " : " 
                         + response.getStatusLine().getReasonPhrase());
                 if (res != null) {
                     log.error(res);

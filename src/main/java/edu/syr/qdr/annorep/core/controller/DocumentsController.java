@@ -41,13 +41,13 @@ public class DocumentsController {
     public ResponseEntity<?> getConvertedDocument(@PathVariable String id) {
         log.info("DocumentsController:  get pdf");
         HttpHeaders headers = new HttpHeaders();
-        headers.add("Location", "https://dv.dev-aws.qdr.org/api/access/datafile/" + id + "/metadata/ingestPDF/v1.0");
+        headers.add("Location", getPdfUrl(Long.getLong(id)));
         return new ResponseEntity<String>(headers,HttpStatus.FOUND);
     }
     
     @GetMapping(path = DocumentLinks.ANNOTATION_DOC)
     public ResponseEntity<?> getAnnotationDocument(@PathVariable String id) {
-        log.info("DocumentsController:  get pdf");
+        log.info("DocumentsController:  get ann");
         HttpHeaders headers = new HttpHeaders();
         headers.add("Location", getAnnUrl(Long.getLong(id)));
         return new ResponseEntity<String>(headers,HttpStatus.FOUND);
@@ -56,12 +56,13 @@ public class DocumentsController {
     @PutMapping(path = DocumentLinks.CONVERT_DOC)
     public ResponseEntity<?> convertDoc(@RequestHeader(name = "X-Dataverse-key") String apikey, @PathVariable long id) {
         log.info("DocumentsController:  convert doc, id: " + id + " " + apikey);
-        log.info("Pingdoc: " + documentsService.ping());
-        log.info("Pingdv: " + dataverseService.ping());
         Documents resource = documentsService.convertDoc(id, apikey);
         log.info("Back from service");
         if (resource == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Could not find datafile");
+        }
+        if(resource.isConverted()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Converted files already exist for the specified version");
         }
 
         return ResponseEntity.ok(resource);

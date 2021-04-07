@@ -13,9 +13,11 @@ import java.util.List;
 import java.util.Map;
 
 import javax.json.Json;
+import javax.json.JsonArray;
 import javax.json.JsonArrayBuilder;
 import javax.json.JsonObject;
 import javax.json.JsonObjectBuilder;
+import javax.json.JsonValue;
 import javax.xml.bind.JAXBElement;
 
 import org.apache.http.entity.ContentType;
@@ -67,24 +69,39 @@ public class DocumentsService {
         return documentsRepository.save(documents);
     }
 
-    public boolean ping() {
-        return true;
-    }
-
     public Documents convertDoc(Long id, String apikey) {
         log.info("Convert: " + id);
-        log.info(id + " exists? :" + (documentsRepository.getOne(id) != null));
+        Documents d = documentsRepository.getOne(id);
+        log.info(id + " exists? :" + (d != null));
         // log.info(id + " exists? :" + documentsRepository.existsById(id));
-        log.info("Ping: " + dataverseService.ping());
-        if (documentsRepository.existsById(id)) {
-            throw new IllegalArgumentException();
+
+        /*
+         * try { JsonObject response = dataverseService.getAPIJsonResponse("/api/files/"
+         * + id + "/metadata/draft", apikey); log.info(String.join(", ",
+         * response.keySet())); } catch (Exception e) { return null; }
+         */
+        if (d == null) {
+            try {
+                JsonArray response = dataverseService.getAPIJsonArrayResponse("/api/files/" + id + "/metadata/aux/AnnoRep", apikey);
+                d = new Documents();
+                d.setConverted(false);
+                JsonValue auxObj = response.stream().filter((item -> item.asJsonObject().getString("formatVersion").equals("v1.0"))).findFirst().orElse(null);
+                if (auxObj != null) {
+                    d.setConverted(true);
+                }
+            } catch (Exception e) {
+                // No cached object and can't get find the datafile with this id
+                System.out.println(e.getMessage());
+            }
         }
-        try {
-            JsonObject response = dataverseService.getAPIJsonResponse("/api/files/" + id + "/metadata/draft", apikey);
-            log.info(String.join(", ", response.keySet()));
-        } catch (Exception e) {
+        if (d == null) {
             return null;
         }
+        if (d.isConverted()) {
+            return d;
+        }
+
+        // Valid datafile and valid version to convert
         // Any response means the datafile exists, so create the required aux files
         Path convertedFile = Paths.get("tmp", "convertedFile.pdf");
         Path annotationFile = Paths.get("tmp", "annotationFile.json");
@@ -104,7 +121,7 @@ public class DocumentsService {
         // "ingestPDF", "v1.0", apikey);
         // dataverseService.addAuxiliaryFile(id, annotationFile, "AnnoRep", false,
         // "annotationJson", "v1.0", apikey);
-        Documents d = new Documents();
+        d = new Documents();
         d.setId(id);
         d = saveDocument(d);
 
@@ -299,7 +316,7 @@ public class DocumentsService {
                                                             }
                                                         }
                                                     });
-                                                    PPr ppr =para.getPPr(); 
+                                                    PPr ppr = para.getPPr();
                                                     if (ppr != null) {
                                                         PStyle style = ppr.getPStyle();
                                                         System.out.println("ParaStyle: " + style.getVal());
@@ -334,16 +351,13 @@ public class DocumentsService {
                             System.out.println("CommentText: " + commentText.get(id).toString());
 
                             System.out.println("PostText: " + postCommentText.get(id).getString());
-                            
+
                             jab.add(createAnnotation(docId, preCommentText.get(id).getString(), commentedText.get(id).toString(), postCommentText.get(id).getString(), commentText.get(id).toString(), theTitle));
                         });
                         String annStr = jab.build().toString();
                         System.out.println("Annotations: " + annStr);
                         annOutputStream.write(annStr.getBytes(StandardCharsets.UTF_8));
-                        //try(PrintWriter pw = new PrintWriter(annOutputStream)) {
-                        //    pw.print(annStr);
-                        //}
-                        
+
                         // This is getting all text
                         String textNodesXPath = "//w:t";
                         List<Object> textNodes = mainDocumentPart
@@ -383,9 +397,9 @@ public class DocumentsService {
                 Thread.sleep(100);
                 i++;
             }
-            //Path annotationFile = Paths.get("tmp", "annotationFile.json");
-            //return new FileInputStream(annotationFile.toFile());
-             return annInputStream;
+            // Path annotationFile = Paths.get("tmp", "annotationFile.json");
+            // return new FileInputStream(annotationFile.toFile());
+            return annInputStream;
         } catch (IOException e) {
             // TODO Auto-generated catch block
             try {
