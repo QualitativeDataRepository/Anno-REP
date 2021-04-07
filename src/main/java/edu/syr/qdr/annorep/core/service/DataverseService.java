@@ -69,27 +69,6 @@ public class DataverseService {
 
     }
 
-    public JsonArray getAPIJsonArrayResponse(String apiPath, String apikey) throws Exception {
-        log.info("Getting: " + apiPath);
-        HttpGet httpGet = new HttpGet(url + apiPath);
-        if (apikey != null) {
-            httpGet.addHeader("X-Dataverse-key", apikey);
-        }
-        try {
-            CloseableHttpResponse response = getHttpClient().execute(httpGet);
-            String data = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
-            if (response.getStatusLine().getStatusCode() != 200) {
-                throw new Exception("Response code: " + response.getStatusLine().getStatusCode() + ", " + data);
-            }
-            JsonReader r = Json.createReader(new StringReader(data));
-            return r.readArray();
-        } catch (IOException ioe) {
-            log.error("IOException getting url", ioe);
-            throw new Exception("IOException getting url", ioe);
-        }
-
-    }
-
     public InputStream getFile(long id, String apikey) {
         HttpGet httpGet = new HttpGet(url + "/api/access/datafile/" + id);
         if (apikey != null) {

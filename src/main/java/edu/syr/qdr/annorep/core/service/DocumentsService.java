@@ -71,7 +71,10 @@ public class DocumentsService {
 
     public Documents convertDoc(Long id, String apikey) {
         log.info("Convert: " + id);
-        Documents d = documentsRepository.getOne(id);
+        Documents d = null;
+        if (documentsRepository.existsById(id)) {
+          d = documentsRepository.getOne(id);
+        }
         log.info(id + " exists? :" + (d != null));
         // log.info(id + " exists? :" + documentsRepository.existsById(id));
 
@@ -82,13 +85,15 @@ public class DocumentsService {
          */
         if (d == null) {
             try {
-                JsonArray response = dataverseService.getAPIJsonArrayResponse("/api/files/" + id + "/metadata/aux/AnnoRep", apikey);
+                JsonArray response = dataverseService.getAPIJsonResponse("/api/access/datafile/" + id + "/metadata/aux/AnnoRep", apikey).getJsonArray("data");
                 d = new Documents();
+                d.setId(id);
                 d.setConverted(false);
                 JsonValue auxObj = response.stream().filter((item -> item.asJsonObject().getString("formatVersion").equals("v1.0"))).findFirst().orElse(null);
                 if (auxObj != null) {
                     d.setConverted(true);
                 }
+                d = documentsRepository.save(d);
             } catch (Exception e) {
                 // No cached object and can't get find the datafile with this id
                 System.out.println(e.getMessage());
