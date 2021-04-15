@@ -16,6 +16,7 @@ import javax.json.JsonReader;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.ContentType;
@@ -33,11 +34,32 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 public class DataverseService {
 
-    private String url = "https://dv.dev-aws.qdr.org";
+    private static String url = "https://dv.dev-aws.qdr.org";
     private CloseableHttpClient httpClient = null;
 
     private DataverseService() {
 
+    }
+    
+    public boolean ping() {
+        return true;
+        
+    }
+
+    public String getPdfUrl(long id) {
+        return url + getPdfPath(id);
+    }
+
+    public String getPdfPath(long id) {
+        return "/api/access/datafile/" + id + "/metadata/ingestPDF/v1.0";
+    }
+
+    public String getAnnUrl(long id) {
+        return url + getAnnPath(id);
+    }
+
+    public String getAnnPath(long id) {
+        return "/api/access/datafile/" + id + "/metadata/annotationJson/v1.0";
     }
 
     public CloseableHttpClient getHttpClient() {
@@ -57,7 +79,10 @@ public class DataverseService {
         try {
             CloseableHttpResponse response = getHttpClient().execute(httpGet);
             String data = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
-            if (response.getStatusLine().getStatusCode() != 200) {
+            int status = response.getStatusLine().getStatusCode(); 
+            if ( status == 404) {
+                return Json.createObjectBuilder().build();
+            } else if (status != 200) {
                 throw new Exception("Response code: " + response.getStatusLine().getStatusCode() + ", " + data);
             }
             JsonReader r = Json.createReader(new StringReader(data));
@@ -67,6 +92,27 @@ public class DataverseService {
             throw new Exception("IOException getting url", ioe);
         }
 
+    }
+
+    public int deleteAPI(String apiPath, String apikey) {
+        log.info("DELETEing: " + apiPath);
+        HttpDelete httpDelete = new HttpDelete(url + apiPath);
+        if (apikey != null) {
+            httpDelete.addHeader("X-Dataverse-key", apikey);
+        }
+        try {
+            CloseableHttpResponse response = getHttpClient().execute(httpDelete);
+            String data = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+            int status = response.getStatusLine().getStatusCode();
+            if (response.getStatusLine().getStatusCode() != 200) {
+                log.info("Received error status from Dataverse: " + status);
+                return status;
+            }
+        } catch (IOException ioe) {
+            log.error("IOException getting url", ioe);
+            return 500;
+        }
+        return 200;
     }
 
     public InputStream getFile(long id, String apikey) {
@@ -241,7 +287,7 @@ public class DataverseService {
                 return r.readObject();
             } else {
                 // An error and unlikely that we can recover, so report and move on.
-                log.error("Error response when processing aux file: " + formatTag + "/" + formatVersion + " : " 
+                log.error("Error response when processing aux file: " + formatTag + "/" + formatVersion + " : "
                         + response.getStatusLine().getReasonPhrase());
                 if (res != null) {
                     log.error(res);

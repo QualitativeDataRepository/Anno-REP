@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,26 +32,27 @@ public class DocumentsController {
 
     @Autowired
     DataverseService dataverseService;
- 
+
     @ExceptionHandler
     void handleIllegalArgumentException(IllegalArgumentException e, HttpServletResponse response) throws IOException {
         response.sendError(HttpStatus.CONFLICT.value(), "Already Converted");
     }
 
     @GetMapping(path = DocumentLinks.CONVERTED_DOC)
-    public ResponseEntity<?> getConvertedDocument(@PathVariable String id) {
+    public ResponseEntity<?> getConvertedDocument(@PathVariable long id) {
         log.info("DocumentsController:  get pdf");
         HttpHeaders headers = new HttpHeaders();
-        headers.add("Location", getPdfUrl(Long.getLong(id)));
-        return new ResponseEntity<String>(headers,HttpStatus.FOUND);
+        headers.add("Location", dataverseService.getPdfUrl(id));
+        return new ResponseEntity<String>(headers, HttpStatus.FOUND);
     }
-    
+
     @GetMapping(path = DocumentLinks.ANNOTATION_DOC)
-    public ResponseEntity<?> getAnnotationDocument(@PathVariable String id) {
+    public ResponseEntity<?> getAnnotationDocument(@PathVariable long id) {
         log.info("DocumentsController:  get ann");
+
         HttpHeaders headers = new HttpHeaders();
-        headers.add("Location", getAnnUrl(Long.getLong(id)));
-        return new ResponseEntity<String>(headers,HttpStatus.FOUND);
+        headers.add("Location", dataverseService.getAnnUrl(id));
+        return new ResponseEntity<String>(headers, HttpStatus.FOUND);
     }
 
     @PutMapping(path = DocumentLinks.CONVERT_DOC)
@@ -61,17 +63,23 @@ public class DocumentsController {
         if (resource == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Could not find datafile");
         }
-        if(resource.isConverted()) {
+        if (resource.isConverted()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Converted files already exist for the specified version");
         }
 
-        return ResponseEntity.ok(resource);
+        return ResponseEntity.ok(resource.getId());
     }
-    public static String getPdfUrl(Long id) {
-        return "https://dv.dev-aws.qdr.org/api/access/datafile/" + id + "/metadata/ingestPDF/v1.0";
+
+    @DeleteMapping(path = DocumentLinks.CONVERT_DOC)
+    public ResponseEntity<?> deleteConvertedDocument(@RequestHeader(name = "X-Dataverse-key") String apikey, @PathVariable long id) {
+        log.info("DocumentsController:  delete pdf and ann");
+        int status = documentsService.deleteDoc(id, apikey);
+        if (status == 200) {
+            return new ResponseEntity<String>(HttpStatus.NO_CONTENT);
+        } else {
+            return new ResponseEntity<String>(HttpStatus.valueOf(status));
+        }
     }
-    public static String getAnnUrl(Long id) {
-        return "https://dv.dev-aws.qdr.org/api/access/datafile/" + id + "/metadata/annotationJson/v1.0";
-    }
+
 
 }

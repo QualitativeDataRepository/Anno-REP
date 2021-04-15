@@ -84,20 +84,21 @@ public class DocumentsService {
          * response.keySet())); } catch (Exception e) { return null; }
          */
         if (d == null) {
+            d = new Documents();
+            d.setId(id);
+            d.setConverted(false);
             try {
                 JsonArray response = dataverseService.getAPIJsonResponse("/api/access/datafile/" + id + "/metadata/aux/AnnoRep", apikey).getJsonArray("data");
-                d = new Documents();
-                d.setId(id);
-                d.setConverted(false);
                 JsonValue auxObj = response.stream().filter((item -> item.asJsonObject().getString("formatVersion").equals("v1.0"))).findFirst().orElse(null);
                 if (auxObj != null) {
                     d.setConverted(true);
                 }
-                d = documentsRepository.save(d);
             } catch (Exception e) {
                 // No cached object and can't get find the datafile with this id
                 System.out.println(e.getMessage());
             }
+            d = documentsRepository.save(d);
+
         }
         if (d == null) {
             return null;
@@ -108,8 +109,8 @@ public class DocumentsService {
 
         // Valid datafile and valid version to convert
         // Any response means the datafile exists, so create the required aux files
-        Path convertedFile = Paths.get("tmp", "convertedFile.pdf");
-        Path annotationFile = Paths.get("tmp", "annotationFile.json");
+//        Path convertedFile = Paths.get("tmp", "convertedFile.pdf");
+//        Path annotationFile = Paths.get("tmp", "annotationFile.json");
         try (InputStream docIn = dataverseService.getFile(id, apikey);) {
             dataverseService.addAuxiliaryFile(id, createPDF(docIn), ContentType.create("application/pdf", StandardCharsets.UTF_8), "AnnoRep", false, "ingestPDF", "v1.0", apikey);
         } catch (IOException e) {
@@ -122,14 +123,11 @@ public class DocumentsService {
             // TODO Auto-generated catch block
             e.printStackTrace();
         }
-        // dataverseService.addAuxiliaryFile(id, convertedFile, "AnnoRep", false,
-        // "ingestPDF", "v1.0", apikey);
-        // dataverseService.addAuxiliaryFile(id, annotationFile, "AnnoRep", false,
-        // "annotationJson", "v1.0", apikey);
-        d = new Documents();
-        d.setId(id);
-        d = saveDocument(d);
 
+        d.setConverted(true);
+        d = saveDocument(d);
+        //Report the state prior to successful conversion
+        d.setConverted(false);
         return d;
 
     }
@@ -389,9 +387,9 @@ public class DocumentsService {
                     selector.add("exact", exact);
                     selector.add("prefix", prefix);
                     selector.add("suffix", suffix);
-                    annOb.add("target", Json.createArrayBuilder().add(Json.createObjectBuilder().add("source", DocumentsController.getPdfUrl(docId)).add("selector", Json.createArrayBuilder().add(selector))));
+                    annOb.add("target", Json.createArrayBuilder().add(Json.createObjectBuilder().add("source", dataverseService.getPdfUrl(docId)).add("selector", Json.createArrayBuilder().add(selector))));
                     annOb.add("text", comment);
-                    annOb.add("uri", DocumentsController.getPdfUrl(docId));
+                    annOb.add("uri", dataverseService.getPdfUrl(docId));
                     annOb.add("document", Json.createObjectBuilder().add("title", Json.createArrayBuilder().add(title)));
                     return annOb;
                 }
@@ -425,6 +423,21 @@ public class DocumentsService {
             e.printStackTrace();
         }
         return null;
+    }
+
+    public int deleteDoc(Long id, String apikey) {
+        log.info("Deleting for: " + id);
+        if (documentsRepository.existsById(id)) {
+            documentsRepository.deleteById(id);
+        }
+        int status1 = dataverseService.deleteAPI(dataverseService.getAnnPath(id), apikey);
+        int status2 = dataverseService.deleteAPI(dataverseService.getPdfPath(id), apikey);
+        if ((status1 == status2)) {
+            return status1;
+        } else {
+            return 500;
+        }
+
     }
 
 }
