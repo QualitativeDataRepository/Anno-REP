@@ -259,9 +259,9 @@ public class DocumentsService {
                             inComment.put(id, false);
                             commentStarted.put(id, false);
                         });
-
+                        boolean firstPara = true;
                         for (Object o : mainDocumentPart.getContent()) {
-                            boolean firstPara = true;
+
                             if (o instanceof P) {
                                 P para = (P) o;
 
