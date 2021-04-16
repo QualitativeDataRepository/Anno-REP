@@ -288,6 +288,8 @@ public class DocumentsService {
                                             }
                                         }
                                     });
+                                    
+                                } else {
                                     firstPara = false;
                                 }
                                 for (Object po : para.getContent()) {
