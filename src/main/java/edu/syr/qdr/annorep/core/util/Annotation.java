@@ -52,8 +52,8 @@ public class Annotation {
         return inComment;
     }
 
-    public void setInComment(boolean inComment) {
-        this.inComment = inComment;
+    public void endAnchor() {
+        this.inComment = false;
         tqs.setInComment(inComment);
         tps.setInComment(inComment);
     }
@@ -62,8 +62,12 @@ public class Annotation {
         return commentStarted;
     }
 
-    public void setCommentStarted(boolean commentStarted) {
-        this.commentStarted = commentStarted;
+    public void startAnchor() {
+        
+        this.commentStarted = true;
+        this.inComment = true;
+        tqs.setInComment(inComment);
+        tps.setInComment(inComment);
         tqs.setCommentStarted(commentStarted);
         tps.setCommentStarted(commentStarted);
     }
