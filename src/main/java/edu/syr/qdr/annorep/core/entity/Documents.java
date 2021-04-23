@@ -8,11 +8,14 @@ import lombok.Data;
 @Entity
 @Data
 public class Documents {
-	
-	@Id
-	@Column
+
+    @Id
+    @Column
     private long id;
-	
-	@Column 
-	private boolean converted; 
+
+    @Column
+    private boolean converted;
+
+    @Column
+    private String mimetype;
 }

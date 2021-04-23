@@ -73,7 +73,7 @@ public class DocumentsController {
     @DeleteMapping(path = DocumentLinks.CONVERT_DOC)
     public ResponseEntity<?> deleteConvertedDocument(@RequestHeader(name = "X-Dataverse-key") String apikey, @PathVariable long id) {
         log.info("DocumentsController:  delete pdf and ann");
-        int status = documentsService.deleteDoc(id, apikey);
+        int status = documentsService.deleteAuxDocs(id, apikey);
         if (status == 200) {
             return new ResponseEntity<String>(HttpStatus.NO_CONTENT);
         } else {

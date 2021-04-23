@@ -1,5 +1,7 @@
 package edu.syr.qdr.annorep.core.service;
 
+import java.awt.geom.Rectangle2D;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PipedInputStream;
@@ -21,6 +23,15 @@ import javax.json.JsonValue;
 import javax.xml.bind.JAXBElement;
 
 import org.apache.http.entity.ContentType;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.interactive.action.PDAction;
+import org.apache.pdfbox.pdmodel.interactive.action.PDActionURI;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotation;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationLink;
+import org.apache.pdfbox.text.PDFTextStripper;
+import org.apache.pdfbox.text.PDFTextStripperByArea;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.docx4j.openpackaging.packages.WordprocessingMLPackage;
 import org.docx4j.openpackaging.parts.WordprocessingML.CommentsPart;
@@ -40,10 +51,13 @@ import edu.syr.qdr.annorep.core.controller.DocumentsController;
 import edu.syr.qdr.annorep.core.entity.Documents;
 import edu.syr.qdr.annorep.core.repository.DocumentsRepository;
 import edu.syr.qdr.annorep.core.util.Annotation;
+import edu.syr.qdr.annorep.core.util.PdfAnnotationProcessor;
 import edu.syr.qdr.annorep.core.util.StringFragment;
 import fr.opensagres.poi.xwpf.converter.pdf.PdfConverter;
 import fr.opensagres.poi.xwpf.converter.pdf.PdfOptions;
 import lombok.extern.slf4j.Slf4j;
+
+import org.apache.pdfbox.Loader;
 
 @Slf4j
 @Component
@@ -85,9 +99,18 @@ public class DocumentsService {
          * response.keySet())); } catch (Exception e) { return null; }
          */
         if (d == null) {
-            d = new Documents();
-            d.setId(id);
-            d.setConverted(false);
+
+            try {
+                String mimetype = dataverseService.getAPIJsonResponse("/api/search?q=identifier:" + id, apikey).getJsonObject("data").getJsonArray("items").getJsonObject(0).getString("file_content_type");
+                d = new Documents();
+                d.setId(id);
+                d.setConverted(false);
+                d.setMimetype(mimetype);
+            } catch (Exception e) {
+                log.warn("Error searching for " + id + ": " + e.getLocalizedMessage());
+                return null;
+            }
+
             try {
                 JsonArray response = dataverseService.getAPIJsonResponse("/api/access/datafile/" + id + "/metadata/aux/AnnoRep", apikey).getJsonArray("data");
                 JsonValue auxObj = response.stream().filter((item -> item.asJsonObject().getString("formatVersion").equals("v1.0"))).findFirst().orElse(null);
@@ -111,20 +134,34 @@ public class DocumentsService {
         // Valid datafile and valid version to convert
         // Any response means the datafile exists, so create the required aux files
         // Path convertedFile = Paths.get("tmp", "convertedFile.pdf");
-        // Path annotationFile = Paths.get("tmp", "annotationFile.json");
-        try (InputStream docIn = dataverseService.getFile(id, apikey);) {
-            dataverseService.addAuxiliaryFile(id, createPDF(docIn), ContentType.create("application/pdf", StandardCharsets.UTF_8), "AnnoRep", false, "ingestPDF", "v1.0", apikey);
-        } catch (IOException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-        try (InputStream docIn = dataverseService.getFile(id, apikey);) {
-            dataverseService.addAuxiliaryFile(id, createAnnotations(id, docIn), ContentType.create("application/json", StandardCharsets.UTF_8), "AnnoRep", false, "annotationJson", "v1.0", apikey);
-        } catch (IOException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
 
+        // Path annotationFile = Paths.get("tmp", "annotationFile.json");
+        switch (d.getMimetype()) {
+        case "application/pdf":
+            try (InputStream docIn = dataverseService.getFile(id, apikey);) {
+                dataverseService.addAuxiliaryFile(id, createPDFAnnotations(id, docIn), ContentType.create("application/json", StandardCharsets.UTF_8), "AnnoRep", false, "annotationJson", "v1.0", apikey);
+            } catch (IOException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+            break;
+        case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+
+            try (InputStream docIn = dataverseService.getFile(id, apikey);) {
+                dataverseService.addAuxiliaryFile(id, createPDF(docIn), ContentType.create("application/pdf", StandardCharsets.UTF_8), "AnnoRep", false, "ingestPDF", "v1.0", apikey);
+            } catch (IOException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+
+            try (InputStream docIn = dataverseService.getFile(id, apikey);) {
+                dataverseService.addAuxiliaryFile(id, createAnnotations(id, docIn), ContentType.create("application/json", StandardCharsets.UTF_8), "AnnoRep", false, "annotationJson", "v1.0", apikey);
+            } catch (IOException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+            break;
+        }
         d.setConverted(true);
         d = saveDocument(d);
         // Report the state prior to successful conversion
@@ -288,7 +325,7 @@ public class DocumentsService {
                                             }
                                         }
                                     });
-                                    
+
                                 } else {
                                     firstPara = false;
                                 }
@@ -297,8 +334,7 @@ public class DocumentsService {
                                     if (po instanceof CommentRangeStart) {
                                         // ToDo = get id and handle overlapping comments
                                         BigInteger id = ((CommentRangeStart) po).getId();
-                                        annotationMap.get(id).setCommentStarted(true);
-                                        annotationMap.get(id).setInComment(true);
+                                        annotationMap.get(id).startAnchor();
                                         commentStarted.put(id, true);
                                         inComment.put(id, true);
                                         System.out.println("Comment Start: " + id);
@@ -307,7 +343,7 @@ public class DocumentsService {
                                     }
                                     if (po instanceof CommentRangeEnd) {
                                         BigInteger id = ((CommentRangeEnd) po).getId();
-                                        annotationMap.get(id).setInComment(false);
+                                        annotationMap.get(id).endAnchor();
                                         inComment.put(id, false);
                                         System.out.println("Comment End: " + id);
                                         // System.out.println("Anchor: " + String.join("", commentTexts));
@@ -374,7 +410,6 @@ public class DocumentsService {
                             jab.add(ann.getJson());
                         });
 
-
                         String annStr = jab.build().toString();
                         System.out.println("Annotations: " + annStr);
                         annOutputStream.write(annStr.getBytes(StandardCharsets.UTF_8));
@@ -397,8 +432,7 @@ public class DocumentsService {
                         });
                         annStr = oldjab.build().toString();
                         System.out.println("\n\nOld Annotations: " + annStr);
-                        
-                        
+
                         // This is getting all text
                         String textNodesXPath = "//w:t";
                         List<Object> textNodes = mainDocumentPart
@@ -464,14 +498,120 @@ public class DocumentsService {
         return null;
     }
 
-    public int deleteDoc(Long id, String apikey) {
+    private InputStream createPDFAnnotations(Long docId, InputStream docInputStream) {
+
+        /*
+         * PDDocument document = PDDocument.load(new File("name.pdf"));
+         * document.getClass(); PDPage pdfpage = document.getPage(1); annotations =
+         * pdfpage.getAnnotations(); for (int j = 0; j < annotations.size(); j++) {
+         * PDAnnotation annot = annotations.get(j); if (annot instanceof
+         * PDAnnotationLink) { PDAnnotationLink link = (PDAnnotationLink) annot;
+         * PDAction action = link.getAction(); if (action instanceof PDActionURI) {
+         * PDActionURI uri = (PDActionURI) action; urls += uri.getURI();
+         * System.out.println(uri.getURI()); } } } }
+         * 
+         */
+        try {
+            PDDocument document;
+
+            document = Loader.loadPDF(docInputStream);
+
+            System.out.println("Pages: " + document.getNumberOfPages());
+            System.out.println("Version: " + document.getVersion());
+
+            PDPage pdfpage = document.getPage(0);
+            List<PDAnnotation> annotations = pdfpage.getAnnotations();
+            PDFTextStripperByArea stripper = new PDFTextStripperByArea();
+            Map<Integer, Annotation> annMap = new HashMap<Integer, Annotation>();
+            Map<Integer, String> anchorMap = new HashMap<Integer, String>();
+            for (int j = 0; j < annotations.size(); j++) {
+                PDAnnotation annot = annotations.get(j);
+                System.out.println("Annotation " + j);
+                System.out.println("Contents: " + annot.getContents());
+                if(annot.getContents()!=null) {System.out.println("Contents len: " + annot.getContents().length());}
+                System.out.println("Subtype: " + annot.getSubtype());
+                if (annot.getSubtype().equals("Highlight")) {
+                    Annotation ann = new Annotation();
+                    annMap.put(j, ann);
+                    ann.appendCommentText(annot.getContents());
+                    PDRectangle rect = annot.getRectangle();
+                    System.out.println("Rect: " + rect.getLowerLeftX() + "," + rect.getLowerLeftY() + "," + rect.getUpperRightX() + "," + rect.getUpperRightY());
+
+                    float x = rect.getLowerLeftX();
+                    float y = rect.getUpperRightY();
+                    float width = rect.getWidth();
+                    float height = rect.getHeight();
+                    int rotation = pdfpage.getRotation();
+                    if (rotation == 0) {
+                        PDRectangle pageSize = pdfpage.getMediaBox();
+                        y = pageSize.getHeight() - y;
+                    } else if (rotation == 90) {
+                    }
+                    Rectangle2D.Float awtRect = new Rectangle2D.Float(x, y, width, height);
+                    stripper.addRegion("" + j, awtRect);
+
+                }
+                if (annot instanceof PDAnnotationLink) {
+                    PDAnnotationLink link = (PDAnnotationLink) annot;
+                    PDAction action = link.getAction();
+                    if (action instanceof PDActionURI) {
+                        PDActionURI uri = (PDActionURI) action;
+                        // urls += uri.getURI();
+                        System.out.println(uri.getURI());
+                    }
+                }
+            }
+            stripper.extractRegions(pdfpage);
+            for (int j = 0; j < annotations.size(); j++) {
+                PDAnnotation annot = annotations.get(j);
+                if (annot.getSubtype().equals("Highlight")) {
+                    String anchorText =  stripper.getTextForRegion("" + j);
+                    anchorMap.put(j, anchorText );
+                    System.out.println("Anchor text " + j + ": " + anchorText);
+                }
+            }
+            PDFTextStripper textStripper = new PDFTextStripper();
+            textStripper.setAddMoreFormatting(true);
+
+            System.out.println("Full Text: " + textStripper.getText(document));
+            
+            PdfAnnotationProcessor pdfR = new PdfAnnotationProcessor(annMap, anchorMap);
+            pdfR.processDocument(document);
+            JsonArrayBuilder jab = Json.createArrayBuilder();
+
+            annMap.values().forEach(ann -> {
+                ann.setDocUri(dataverseService.getPdfUrl(docId));
+                jab.add(ann.getJson());
+            });
+
+            String annStr = jab.build().toString();
+            System.out.println("Annotations: " + annStr);
+            return new ByteArrayInputStream(annStr.getBytes(StandardCharsets.UTF_8));
+           // annOutputStream.write(annStr.getBytes(StandardCharsets.UTF_8));
+
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+
+        return null;
+    }
+
+    public int deleteAuxDocs(Long id, String apikey) {
         log.info("Deleting for: " + id);
+        Documents d = null;
         if (documentsRepository.existsById(id)) {
-            documentsRepository.deleteById(id);
+            d = documentsRepository.getOne(id);
         }
         int status1 = dataverseService.deleteAPI(dataverseService.getAnnPath(id), apikey);
         int status2 = dataverseService.deleteAPI(dataverseService.getPdfPath(id), apikey);
         if ((status1 == status2)) {
+            if (status1 == 200) {
+                if (d != null) {
+                    d.setConverted(false);
+                    documentsRepository.save(d);
+                }
+            }
             return status1;
         } else {
             return 500;
