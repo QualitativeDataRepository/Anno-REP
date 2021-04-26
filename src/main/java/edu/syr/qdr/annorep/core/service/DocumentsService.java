@@ -511,9 +511,12 @@ public class DocumentsService {
             Map<Integer, String> anchorMap = new HashMap<Integer, String>();
             int numHighlights = 0;
 
+            // Find 'Highlight' comments
             for (PDPage pdfPage : document.getPages()) {
                 log.debug("Next Page");
                 List<PDAnnotation> annotations = pdfPage.getAnnotations();
+                // Create a text stripper to find the anchor text in all of the rectangles
+                // covered by the highlight comments
                 PDFTextStripperByArea stripper = new PDFTextStripperByArea();
                 for (int j = 0; j < annotations.size(); j++) {
                     PDAnnotation annot = annotations.get(j);
@@ -527,8 +530,11 @@ public class DocumentsService {
                         log.debug("Found Highlight " + numHighlights + " : " + annot.getContents());
                         Annotation ann = new Annotation();
                         numHighlights++;
+                        // Create an annotation for this highlight comment
                         annMap.put(numHighlights, ann);
+                        // Add the comment text
                         ann.appendCommentText(annot.getContents());
+                        // Get the rectangle that is highlighted so we can find the anchor text
                         PDRectangle rect = annot.getRectangle();
                         log.debug("Highlighted Rectangle " + numHighlights + " : " + rect.getLowerLeftX() + "," + rect.getLowerLeftY() + "," + rect.getUpperRightX() + "," + rect.getUpperRightY());
 
@@ -537,21 +543,26 @@ public class DocumentsService {
                         float width = rect.getWidth();
                         float height = rect.getHeight();
                         int rotation = pdfPage.getRotation();
+                        // Adjust based on rotation
                         if (rotation == 0) {
                             PDRectangle pageSize = pdfPage.getMediaBox();
                             y = pageSize.getHeight() - y;
                         } else if (rotation == 90) {
+                            // Do nothing
                         }
                         Rectangle2D.Float awtRect = new Rectangle2D.Float(x, y, width, height);
+                        // Queue the rectangles
                         stripper.addRegion("" + j, awtRect);
 
                     }
                 }
+                // Now get anchor text for all annotations on the page at once
                 stripper.extractRegions(pdfPage);
                 for (int j = 0; j < annotations.size(); j++) {
                     PDAnnotation annot = annotations.get(j);
                     if (annot.getSubtype().equals("Highlight")) {
                         String anchorText = stripper.getTextForRegion("" + j);
+                        // Put the anchor text in the map with the ame id as the annotations
                         anchorMap.put(numHighlights, anchorText);
                         log.debug("Anchor text " + numHighlights + ": " + anchorText);
                     }
@@ -565,9 +576,16 @@ public class DocumentsService {
 
                 System.out.println("Full Text: " + textStripper.getText(document));
             }
-            
-            PdfAnnotationProcessor pdfR = new PdfAnnotationProcessor(annMap, anchorMap);
-            pdfR.processDocument(document);
+            // Now that we have the comment text and anchor text, we need to stream through
+            // the overall doc text to be able to populate TextQuote and TextPosition
+            // Selectors
+            // This class reads the pdf doc text and makes it look like a stream with anchor
+            // start/anchor stop events in it so it can be processed the same way as with
+            // docs files.
+            PdfAnnotationProcessor pdfProc = new PdfAnnotationProcessor(annMap, anchorMap);
+            pdfProc.processDocument(document);
+            // The result of processDocument should be that all of the annotations in the
+            // map are now complete and can be used to generate json for the annotations doc
             JsonArrayBuilder jab = Json.createArrayBuilder();
 
             annMap.values().forEach(ann -> {
@@ -577,8 +595,8 @@ public class DocumentsService {
 
             String annStr = jab.build().toString();
             log.debug("Annotations: " + annStr);
+            // Return a stream that can be used to create the annotations aux file.
             return new ByteArrayInputStream(annStr.getBytes(StandardCharsets.UTF_8));
-            // annOutputStream.write(annStr.getBytes(StandardCharsets.UTF_8));
 
         } catch (IOException e) {
             // TODO Auto-generated catch block
