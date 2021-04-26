@@ -500,80 +500,71 @@ public class DocumentsService {
 
     private InputStream createPDFAnnotations(Long docId, InputStream docInputStream) {
 
-        /*
-         * PDDocument document = PDDocument.load(new File("name.pdf"));
-         * document.getClass(); PDPage pdfpage = document.getPage(1); annotations =
-         * pdfpage.getAnnotations(); for (int j = 0; j < annotations.size(); j++) {
-         * PDAnnotation annot = annotations.get(j); if (annot instanceof
-         * PDAnnotationLink) { PDAnnotationLink link = (PDAnnotationLink) annot;
-         * PDAction action = link.getAction(); if (action instanceof PDActionURI) {
-         * PDActionURI uri = (PDActionURI) action; urls += uri.getURI();
-         * System.out.println(uri.getURI()); } } } }
-         * 
-         */
         try {
             PDDocument document;
 
             document = Loader.loadPDF(docInputStream);
 
-            System.out.println("Pages: " + document.getNumberOfPages());
-            System.out.println("Version: " + document.getVersion());
-
-            PDPage pdfpage = document.getPage(0);
-            List<PDAnnotation> annotations = pdfpage.getAnnotations();
-            PDFTextStripperByArea stripper = new PDFTextStripperByArea();
+            log.debug("Pages: " + document.getNumberOfPages());
+            log.debug("Version: " + document.getVersion());
             Map<Integer, Annotation> annMap = new HashMap<Integer, Annotation>();
             Map<Integer, String> anchorMap = new HashMap<Integer, String>();
-            for (int j = 0; j < annotations.size(); j++) {
-                PDAnnotation annot = annotations.get(j);
-                System.out.println("Annotation " + j);
-                System.out.println("Contents: " + annot.getContents());
-                if(annot.getContents()!=null) {System.out.println("Contents len: " + annot.getContents().length());}
-                System.out.println("Subtype: " + annot.getSubtype());
-                if (annot.getSubtype().equals("Highlight")) {
-                    Annotation ann = new Annotation();
-                    annMap.put(j, ann);
-                    ann.appendCommentText(annot.getContents());
-                    PDRectangle rect = annot.getRectangle();
-                    System.out.println("Rect: " + rect.getLowerLeftX() + "," + rect.getLowerLeftY() + "," + rect.getUpperRightX() + "," + rect.getUpperRightY());
+            int numHighlights = 0;
 
-                    float x = rect.getLowerLeftX();
-                    float y = rect.getUpperRightY();
-                    float width = rect.getWidth();
-                    float height = rect.getHeight();
-                    int rotation = pdfpage.getRotation();
-                    if (rotation == 0) {
-                        PDRectangle pageSize = pdfpage.getMediaBox();
-                        y = pageSize.getHeight() - y;
-                    } else if (rotation == 90) {
+            for (PDPage pdfPage : document.getPages()) {
+                log.debug("Next Page");
+                List<PDAnnotation> annotations = pdfPage.getAnnotations();
+                PDFTextStripperByArea stripper = new PDFTextStripperByArea();
+                for (int j = 0; j < annotations.size(); j++) {
+                    PDAnnotation annot = annotations.get(j);
+                    log.trace("Annotation " + j);
+                    log.trace("Contents: " + annot.getContents());
+                    if (annot.getContents() != null) {
+                        log.trace("Contents len: " + annot.getContents().length());
                     }
-                    Rectangle2D.Float awtRect = new Rectangle2D.Float(x, y, width, height);
-                    stripper.addRegion("" + j, awtRect);
+                    log.trace("Subtype: " + annot.getSubtype());
+                    if (annot.getSubtype().equals("Highlight")) {
+                        log.debug("Found Highlight " + numHighlights + " : " + annot.getContents());
+                        Annotation ann = new Annotation();
+                        numHighlights++;
+                        annMap.put(numHighlights, ann);
+                        ann.appendCommentText(annot.getContents());
+                        PDRectangle rect = annot.getRectangle();
+                        log.debug("Highlighted Rectangle " + numHighlights + " : " + rect.getLowerLeftX() + "," + rect.getLowerLeftY() + "," + rect.getUpperRightX() + "," + rect.getUpperRightY());
 
+                        float x = rect.getLowerLeftX();
+                        float y = rect.getUpperRightY();
+                        float width = rect.getWidth();
+                        float height = rect.getHeight();
+                        int rotation = pdfPage.getRotation();
+                        if (rotation == 0) {
+                            PDRectangle pageSize = pdfPage.getMediaBox();
+                            y = pageSize.getHeight() - y;
+                        } else if (rotation == 90) {
+                        }
+                        Rectangle2D.Float awtRect = new Rectangle2D.Float(x, y, width, height);
+                        stripper.addRegion("" + j, awtRect);
+
+                    }
                 }
-                if (annot instanceof PDAnnotationLink) {
-                    PDAnnotationLink link = (PDAnnotationLink) annot;
-                    PDAction action = link.getAction();
-                    if (action instanceof PDActionURI) {
-                        PDActionURI uri = (PDActionURI) action;
-                        // urls += uri.getURI();
-                        System.out.println(uri.getURI());
+                stripper.extractRegions(pdfPage);
+                for (int j = 0; j < annotations.size(); j++) {
+                    PDAnnotation annot = annotations.get(j);
+                    if (annot.getSubtype().equals("Highlight")) {
+                        String anchorText = stripper.getTextForRegion("" + j);
+                        anchorMap.put(numHighlights, anchorText);
+                        log.debug("Anchor text " + numHighlights + ": " + anchorText);
                     }
                 }
             }
-            stripper.extractRegions(pdfpage);
-            for (int j = 0; j < annotations.size(); j++) {
-                PDAnnotation annot = annotations.get(j);
-                if (annot.getSubtype().equals("Highlight")) {
-                    String anchorText =  stripper.getTextForRegion("" + j);
-                    anchorMap.put(j, anchorText );
-                    System.out.println("Anchor text " + j + ": " + anchorText);
-                }
-            }
-            PDFTextStripper textStripper = new PDFTextStripper();
-            textStripper.setAddMoreFormatting(true);
 
-            System.out.println("Full Text: " + textStripper.getText(document));
+            if (log.isDebugEnabled()) {
+
+                PDFTextStripper textStripper = new PDFTextStripper();
+                textStripper.setAddMoreFormatting(true);
+
+                System.out.println("Full Text: " + textStripper.getText(document));
+            }
             
             PdfAnnotationProcessor pdfR = new PdfAnnotationProcessor(annMap, anchorMap);
             pdfR.processDocument(document);
@@ -585,9 +576,9 @@ public class DocumentsService {
             });
 
             String annStr = jab.build().toString();
-            System.out.println("Annotations: " + annStr);
+            log.debug("Annotations: " + annStr);
             return new ByteArrayInputStream(annStr.getBytes(StandardCharsets.UTF_8));
-           // annOutputStream.write(annStr.getBytes(StandardCharsets.UTF_8));
+            // annOutputStream.write(annStr.getBytes(StandardCharsets.UTF_8));
 
         } catch (IOException e) {
             // TODO Auto-generated catch block
