@@ -81,7 +81,11 @@ public class Annotation {
         annBuilder.add("target", Json.createArrayBuilder().add(Json.createObjectBuilder().add("source", getDocUri()).add("selector",  selectors)));
         annBuilder.add("text", getCommentText());
         annBuilder.add("uri", getDocUri());
-        annBuilder.add("document", Json.createObjectBuilder().add("title", Json.createArrayBuilder().add(getDocTitle())));
+        JsonObjectBuilder doc = Json.createObjectBuilder();
+        if(getDocTitle()!=null) {
+            doc.add("title", Json.createArrayBuilder().add(getDocTitle()));
+        }
+        annBuilder.add("document", doc);
         return annBuilder.build();
     }
 
