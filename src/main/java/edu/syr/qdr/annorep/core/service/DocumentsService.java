@@ -8,8 +8,7 @@ import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,7 +16,6 @@ import java.util.Map;
 import javax.json.Json;
 import javax.json.JsonArray;
 import javax.json.JsonArrayBuilder;
-import javax.json.JsonObject;
 import javax.json.JsonObjectBuilder;
 import javax.json.JsonValue;
 import javax.xml.bind.JAXBElement;
@@ -26,10 +24,7 @@ import org.apache.http.entity.ContentType;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
-import org.apache.pdfbox.pdmodel.interactive.action.PDAction;
-import org.apache.pdfbox.pdmodel.interactive.action.PDActionURI;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotation;
-import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationLink;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.pdfbox.text.PDFTextStripperByArea;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
@@ -47,7 +42,6 @@ import org.docx4j.wml.Text;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import edu.syr.qdr.annorep.core.controller.DocumentsController;
 import edu.syr.qdr.annorep.core.entity.Documents;
 import edu.syr.qdr.annorep.core.repository.DocumentsRepository;
 import edu.syr.qdr.annorep.core.util.Annotation;
@@ -85,17 +79,17 @@ public class DocumentsService {
     }
 
     public Documents convertDoc(Long id, String apikey) {
-        log.info("Convert: " + id);
+        log.info("Converting: " + id);
         Documents d = null;
         if (documentsRepository.existsById(id)) {
             d = documentsRepository.getOne(id);
         }
-        log.info(id + " exists? :" + (d != null));
-        // log.info(id + " exists? :" + documentsRepository.existsById(id));
+        log.debug(id + " exists? :" + (d != null));
+        // log.debug(id + " exists? :" + documentsRepository.existsById(id));
 
         /*
          * try { JsonObject response = dataverseService.getAPIJsonResponse("/api/files/"
-         * + id + "/metadata/draft", apikey); log.info(String.join(", ",
+         * + id + "/metadata/draft", apikey); log.debug(String.join(", ",
          * response.keySet())); } catch (Exception e) { return null; }
          */
         if (d == null) {
@@ -138,8 +132,9 @@ public class DocumentsService {
         // Path annotationFile = Paths.get("tmp", "annotationFile.json");
         switch (d.getMimetype()) {
         case "application/pdf":
-            try (InputStream docIn = dataverseService.getFile(id, apikey);) {
-                dataverseService.addAuxiliaryFile(id, createPDFAnnotations(id, docIn), ContentType.create("application/json", StandardCharsets.UTF_8), "AnnoRep", false, "annotationJson", "v1.0", apikey);
+
+            try (InputStream pdfIn = dataverseService.getFile(id, apikey);) {
+                createAnnotationsAndPdfFromPdf(id, pdfIn, apikey);
             } catch (IOException e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
@@ -148,12 +143,11 @@ public class DocumentsService {
         case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
 
             try (InputStream docIn = dataverseService.getFile(id, apikey);) {
-                dataverseService.addAuxiliaryFile(id, createPDF(docIn), ContentType.create("application/pdf", StandardCharsets.UTF_8), "AnnoRep", false, "ingestPDF", "v1.0", apikey);
+                dataverseService.addAuxiliaryFile(id, createPdfFromDocx(docIn), ContentType.create("application/pdf", StandardCharsets.UTF_8), "AnnoRep", false, "ingestPDF", "v1.0", apikey);
             } catch (IOException e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
             }
-
             try (InputStream docIn = dataverseService.getFile(id, apikey);) {
                 dataverseService.addAuxiliaryFile(id, createAnnotations(id, docIn), ContentType.create("application/json", StandardCharsets.UTF_8), "AnnoRep", false, "annotationJson", "v1.0", apikey);
             } catch (IOException e) {
@@ -170,7 +164,146 @@ public class DocumentsService {
 
     }
 
-    private InputStream createPDF(InputStream docInputStream) {
+    private void createAnnotationsAndPdfFromPdf(Long id, InputStream pdfInputStream, String apikey) {
+
+        Map<Integer, Annotation> annMap = new HashMap<Integer, Annotation>();
+        Map<Integer, String> anchorMap = new HashMap<Integer, String>();
+
+        try {
+            PDDocument document;
+            document = Loader.loadPDF(pdfInputStream);
+
+            log.debug("Pages: " + document.getNumberOfPages());
+            log.debug("Version: " + document.getVersion());
+            if (log.isDebugEnabled()) {
+
+                PDFTextStripper textStripper = new PDFTextStripper();
+                textStripper.setAddMoreFormatting(true);
+
+                log.debug("Full Text: " + textStripper.getText(document));
+            }
+
+            int numHighlights = 0;
+
+            // Find 'Highlight' comments
+            for (PDPage pdfPage : document.getPages()) {
+                log.debug("Next Page");
+                List<PDAnnotation> newAnnotations = new ArrayList<PDAnnotation>();
+                List<PDAnnotation> annotations = pdfPage.getAnnotations();
+                // Create a text stripper to find the anchor text in all of the rectangles
+                // covered by the highlight comments
+                PDFTextStripperByArea stripper = new PDFTextStripperByArea();
+                for (int j = 0; j < annotations.size(); j++) {
+                    PDAnnotation annot = annotations.get(j);
+                    log.trace("Annotation " + j);
+                    log.trace("Contents: " + annot.getContents());
+                    if (annot.getContents() != null) {
+                        log.trace("Contents len: " + annot.getContents().length());
+                    }
+                    log.trace("Subtype: " + annot.getSubtype());
+                    if (annot.getSubtype().equals("Highlight")) {
+                        log.debug("Found Highlight " + numHighlights + " : " + annot.getContents());
+                        Annotation ann = new Annotation();
+                        numHighlights++;
+                        // Create an annotation for this highlight comment
+                        annMap.put(numHighlights, ann);
+                        // Add the comment text
+                        ann.appendCommentText(annot.getContents());
+                        // Get the rectangle that is highlighted so we can find the anchor text
+                        PDRectangle rect = annot.getRectangle();
+                        log.debug("Highlighted Rectangle " + numHighlights + " : " + rect.getLowerLeftX() + "," + rect.getLowerLeftY() + "," + rect.getUpperRightX() + "," + rect.getUpperRightY());
+
+                        float x = rect.getLowerLeftX();
+                        float y = rect.getUpperRightY();
+                        float width = rect.getWidth();
+                        float height = rect.getHeight();
+                        int rotation = pdfPage.getRotation();
+                        // Adjust based on rotation
+                        if (rotation == 0) {
+                            PDRectangle pageSize = pdfPage.getMediaBox();
+                            y = pageSize.getHeight() - y;
+                        } else if (rotation == 90) {
+                            // Do nothing
+                        }
+                        Rectangle2D.Float awtRect = new Rectangle2D.Float(x, y, width, height);
+                        // Queue the rectangles
+                        stripper.addRegion("" + j, awtRect);
+
+                    } else {
+                        newAnnotations.add(annot);
+                    }
+                }
+                // Now get anchor text for all annotations on the page at once
+                stripper.extractRegions(pdfPage);
+                for (int j = 0; j < annotations.size(); j++) {
+                    PDAnnotation annot = annotations.get(j);
+                    if (annot.getSubtype().equals("Highlight")) {
+                        String anchorText = stripper.getTextForRegion("" + j);
+                        // Put the anchor text in the map with the same id as the annotations
+                        anchorMap.put(numHighlights, anchorText);
+                        log.debug("Anchor text " + numHighlights + ": " + anchorText);
+                    }
+                }
+                pdfPage.setAnnotations(newAnnotations);
+            }
+            try (PipedInputStream strippedPdfInputStream = new PipedInputStream()) {
+                new Thread(new Runnable() {
+                    public void run() {
+                        try (PipedOutputStream pdfOutputStream = new PipedOutputStream(strippedPdfInputStream)) {
+                            // process for creating pdf started
+                            document.save(pdfOutputStream);
+                        } catch (Exception e) {
+                            log.error("Error creating pdf: " + e.getMessage());
+                            e.printStackTrace();
+                            throw new RuntimeException("Error creating pdf: " + e.getMessage());
+                        }
+                    }
+                }).start();
+                // Wait for bytes
+                int i = 0;
+                while (strippedPdfInputStream.available() <= 0 && i < 100) {
+                    Thread.sleep(10);
+                    i++;
+                }
+                dataverseService.addAuxiliaryFile(id, strippedPdfInputStream, ContentType.create("application/pdf", StandardCharsets.UTF_8), "AnnoRep", false, "ingestPDF", "v1.0", apikey);
+            } catch (IOException e) {
+                e.printStackTrace();
+            } catch (InterruptedException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+
+            // Now that we have the comment text and anchor text, we need to stream through
+            // the overall doc text to be able to populate TextQuote and TextPosition
+            // Selectors
+            // This class reads the pdf doc text and makes it look like a stream with anchor
+            // start/anchor stop events in it so it can be processed the same way as with
+            // docs files.
+            PdfAnnotationProcessor pdfProc = new PdfAnnotationProcessor(annMap, anchorMap);
+            pdfProc.processDocument(document);
+            // The result of processDocument should be that all of the annotations in the
+            // map are now complete and can be used to generate json for the annotations doc
+            JsonArrayBuilder jab = Json.createArrayBuilder();
+
+            annMap.values().forEach(ann -> {
+                ann.setDocUri(dataverseService.getPdfUrl(id));
+                jab.add(ann.getJson());
+            });
+
+            String annStr = jab.build().toString();
+            log.debug("Annotations: " + annStr);
+
+            dataverseService.addAuxiliaryFile(id, new ByteArrayInputStream(annStr.getBytes(StandardCharsets.UTF_8)), ContentType.create("application/json", StandardCharsets.UTF_8), "AnnoRep", false, "annotationJson", "v1.0", apikey);
+            // Return a stream that can be used to create the annotations aux file.
+            // return new ByteArrayInputStream(annStr.getBytes(StandardCharsets.UTF_8));
+
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+    }
+
+    private InputStream createPdfFromDocx(InputStream docInputStream) {
         PipedInputStream pdfInputStream = new PipedInputStream();
         try {
 
@@ -498,129 +631,20 @@ public class DocumentsService {
         return null;
     }
 
-    private InputStream createPDFAnnotations(Long docId, InputStream docInputStream) {
-
-        try {
-            PDDocument document;
-
-            document = Loader.loadPDF(docInputStream);
-
-            log.debug("Pages: " + document.getNumberOfPages());
-            log.debug("Version: " + document.getVersion());
-            Map<Integer, Annotation> annMap = new HashMap<Integer, Annotation>();
-            Map<Integer, String> anchorMap = new HashMap<Integer, String>();
-            int numHighlights = 0;
-
-            // Find 'Highlight' comments
-            for (PDPage pdfPage : document.getPages()) {
-                log.debug("Next Page");
-                List<PDAnnotation> annotations = pdfPage.getAnnotations();
-                // Create a text stripper to find the anchor text in all of the rectangles
-                // covered by the highlight comments
-                PDFTextStripperByArea stripper = new PDFTextStripperByArea();
-                for (int j = 0; j < annotations.size(); j++) {
-                    PDAnnotation annot = annotations.get(j);
-                    log.trace("Annotation " + j);
-                    log.trace("Contents: " + annot.getContents());
-                    if (annot.getContents() != null) {
-                        log.trace("Contents len: " + annot.getContents().length());
-                    }
-                    log.trace("Subtype: " + annot.getSubtype());
-                    if (annot.getSubtype().equals("Highlight")) {
-                        log.debug("Found Highlight " + numHighlights + " : " + annot.getContents());
-                        Annotation ann = new Annotation();
-                        numHighlights++;
-                        // Create an annotation for this highlight comment
-                        annMap.put(numHighlights, ann);
-                        // Add the comment text
-                        ann.appendCommentText(annot.getContents());
-                        // Get the rectangle that is highlighted so we can find the anchor text
-                        PDRectangle rect = annot.getRectangle();
-                        log.debug("Highlighted Rectangle " + numHighlights + " : " + rect.getLowerLeftX() + "," + rect.getLowerLeftY() + "," + rect.getUpperRightX() + "," + rect.getUpperRightY());
-
-                        float x = rect.getLowerLeftX();
-                        float y = rect.getUpperRightY();
-                        float width = rect.getWidth();
-                        float height = rect.getHeight();
-                        int rotation = pdfPage.getRotation();
-                        // Adjust based on rotation
-                        if (rotation == 0) {
-                            PDRectangle pageSize = pdfPage.getMediaBox();
-                            y = pageSize.getHeight() - y;
-                        } else if (rotation == 90) {
-                            // Do nothing
-                        }
-                        Rectangle2D.Float awtRect = new Rectangle2D.Float(x, y, width, height);
-                        // Queue the rectangles
-                        stripper.addRegion("" + j, awtRect);
-
-                    }
-                }
-                // Now get anchor text for all annotations on the page at once
-                stripper.extractRegions(pdfPage);
-                for (int j = 0; j < annotations.size(); j++) {
-                    PDAnnotation annot = annotations.get(j);
-                    if (annot.getSubtype().equals("Highlight")) {
-                        String anchorText = stripper.getTextForRegion("" + j);
-                        // Put the anchor text in the map with the ame id as the annotations
-                        anchorMap.put(numHighlights, anchorText);
-                        log.debug("Anchor text " + numHighlights + ": " + anchorText);
-                    }
-                }
-            }
-
-            if (log.isDebugEnabled()) {
-
-                PDFTextStripper textStripper = new PDFTextStripper();
-                textStripper.setAddMoreFormatting(true);
-
-                System.out.println("Full Text: " + textStripper.getText(document));
-            }
-            // Now that we have the comment text and anchor text, we need to stream through
-            // the overall doc text to be able to populate TextQuote and TextPosition
-            // Selectors
-            // This class reads the pdf doc text and makes it look like a stream with anchor
-            // start/anchor stop events in it so it can be processed the same way as with
-            // docs files.
-            PdfAnnotationProcessor pdfProc = new PdfAnnotationProcessor(annMap, anchorMap);
-            pdfProc.processDocument(document);
-            // The result of processDocument should be that all of the annotations in the
-            // map are now complete and can be used to generate json for the annotations doc
-            JsonArrayBuilder jab = Json.createArrayBuilder();
-
-            annMap.values().forEach(ann -> {
-                ann.setDocUri(dataverseService.getPdfUrl(docId));
-                jab.add(ann.getJson());
-            });
-
-            String annStr = jab.build().toString();
-            log.debug("Annotations: " + annStr);
-            // Return a stream that can be used to create the annotations aux file.
-            return new ByteArrayInputStream(annStr.getBytes(StandardCharsets.UTF_8));
-
-        } catch (IOException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-
-        return null;
-    }
-
     public int deleteAuxDocs(Long id, String apikey) {
-        log.info("Deleting for: " + id);
+        log.info("Deleting pdf and annotations for: " + id);
         Documents d = null;
         if (documentsRepository.existsById(id)) {
             d = documentsRepository.getOne(id);
         }
         int status1 = dataverseService.deleteAPI(dataverseService.getAnnPath(id), apikey);
         int status2 = dataverseService.deleteAPI(dataverseService.getPdfPath(id), apikey);
+        if((status1==200 || status1==404)&&(status2==200 || status2==404)&&d!=null) {
+            //Clear our flag if the deletes succeeded or the docs don't exist (e.g. some error prevented the creation of one or both docs, one was already deleted, etc.)
+            d.setConverted(false);
+            documentsRepository.save(d);
+        }
         if ((status1 == status2)) {
-            if (status1 == 200) {
-                if (d != null) {
-                    d.setConverted(false);
-                    documentsRepository.save(d);
-                }
-            }
             return status1;
         } else {
             return 500;
