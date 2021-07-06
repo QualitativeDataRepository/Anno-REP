@@ -31,6 +31,7 @@ import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.docx4j.openpackaging.packages.WordprocessingMLPackage;
 import org.docx4j.openpackaging.parts.WordprocessingML.CommentsPart;
 import org.docx4j.openpackaging.parts.WordprocessingML.MainDocumentPart;
+import org.docx4j.wml.Br;
 import org.docx4j.wml.CommentRangeEnd;
 import org.docx4j.wml.CommentRangeStart;
 import org.docx4j.wml.Comments.Comment;
@@ -143,13 +144,13 @@ public class DocumentsService {
         case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
 
             try (InputStream docIn = dataverseService.getFile(id, apikey);) {
-                dataverseService.addAuxiliaryFile(id, createPdfFromDocx(docIn), ContentType.create("application/pdf", StandardCharsets.UTF_8), "AnnoRep", false, "ingestPDF", "v1.0", apikey);
+                dataverseService.addAuxiliaryFile(id, createPdfFromDocx(docIn), ContentType.create("application/pdf", StandardCharsets.UTF_8), "AnnoRep", false, "ingestPDF", "v1.0","AR", apikey);
             } catch (IOException e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
             }
             try (InputStream docIn = dataverseService.getFile(id, apikey);) {
-                dataverseService.addAuxiliaryFile(id, createAnnotations(id, docIn), ContentType.create("application/json", StandardCharsets.UTF_8), "AnnoRep", false, "annotationJson", "v1.0", apikey);
+                dataverseService.addAuxiliaryFile(id, createAnnotations(id, docIn), ContentType.create("application/json", StandardCharsets.UTF_8), "AnnoRep", false, "annotationJson", "v1.0", "AR", apikey);
             } catch (IOException e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
@@ -265,7 +266,7 @@ public class DocumentsService {
                     Thread.sleep(10);
                     i++;
                 }
-                dataverseService.addAuxiliaryFile(id, strippedPdfInputStream, ContentType.create("application/pdf", StandardCharsets.UTF_8), "AnnoRep", false, "ingestPDF", "v1.0", apikey);
+                dataverseService.addAuxiliaryFile(id, strippedPdfInputStream, ContentType.create("application/pdf", StandardCharsets.UTF_8), "AnnoRep", false, "ingestPDF", "v1.0", "AR", apikey);
             } catch (IOException e) {
                 e.printStackTrace();
             } catch (InterruptedException e) {
@@ -293,7 +294,7 @@ public class DocumentsService {
             String annStr = jab.build().toString();
             log.debug("Annotations: " + annStr);
 
-            dataverseService.addAuxiliaryFile(id, new ByteArrayInputStream(annStr.getBytes(StandardCharsets.UTF_8)), ContentType.create("application/json", StandardCharsets.UTF_8), "AnnoRep", false, "annotationJson", "v1.0", apikey);
+            dataverseService.addAuxiliaryFile(id, new ByteArrayInputStream(annStr.getBytes(StandardCharsets.UTF_8)), ContentType.create("application/json", StandardCharsets.UTF_8), "AnnoRep", false, "annotationJson", "v1.0", "AR", apikey);
             // Return a stream that can be used to create the annotations aux file.
             // return new ByteArrayInputStream(annStr.getBytes(StandardCharsets.UTF_8));
 
@@ -398,17 +399,21 @@ public class DocumentsService {
                                         if (po instanceof R) {
                                             R run = (R) po;
                                             for (Object ro : run.getContent()) {
-                                                // System.out.println("Found ro = " + ro.getClass().getCanonicalName());
+                                                 //System.out.println("Found ro = " + ro.getClass().getCanonicalName());
+                                                 if(ro instanceof Br) {
+                                                     annotationMap.get(id).appendCommentText("\n");
+                                                     commentText.get(id).append("\n");
+                                                 }
                                                 if (ro instanceof JAXBElement) {
                                                     JAXBElement<?> jb = (JAXBElement<?>) ro;
-                                                    // System.out.println(jb.getName());
-                                                    // System.out.println(jb.getDeclaredType());
-                                                    // System.out.println(jb.getValue().getClass().getCanonicalName());
-                                                    // System.out.println(jb.getValue());
+                                                    //System.out.println(jb.getName());
+                                                    //System.out.println(jb.getDeclaredType());
+                                                    //System.out.println(jb.getValue().getClass().getCanonicalName());
+                                                    //System.out.println(jb.getValue());
                                                     if (jb.getValue() instanceof Text) {
                                                         Text t = (Text) jb.getValue();
-                                                        System.out.println(t.getSpace());
-                                                        System.out.println(t.getValue());
+                                                        //System.out.println(t.getSpace());
+                                                        //System.out.println(t.getValue());
                                                         // System.out.println((long)t.getValue().charAt(1));
                                                         annotationMap.get(id).appendCommentText(t.getValue());
                                                         commentText.get(id).append(t.getValue());
@@ -418,7 +423,7 @@ public class DocumentsService {
                                             }
                                         }
                                     }
-                                    System.out.println("Comment # " + id + ": " + commentText.get(id).toString());
+                                    //System.out.println("Comment # " + id + ": " + commentText.get(id).toString());
                                 }
                             }
                         }
@@ -447,14 +452,14 @@ public class DocumentsService {
                                         boolean started = commentStarted.get(id);
                                         if (!started) {
                                             preCommentText.get(id).addString(paraSep);
-                                            System.out.println("Adding '" + paraSep + "' to preText for" + id);
+                                            //System.out.println("Adding '" + paraSep + "' to preText for" + id);
                                         } else {
                                             if (inside) {
                                                 commentedText.get(id).append(paraSep);
-                                                System.out.println("Adding '" + paraSep + "' to commentedText for" + id);
+                                                //System.out.println("Adding '" + paraSep + "' to commentedText for" + id);
                                             } else {
                                                 postCommentText.get(id).addString(paraSep);
-                                                System.out.println("Adding '" + paraSep + "' to postText for" + id);
+                                                //System.out.println("Adding '" + paraSep + "' to postText for" + id);
                                             }
                                         }
                                     });
@@ -470,7 +475,7 @@ public class DocumentsService {
                                         annotationMap.get(id).startAnchor();
                                         commentStarted.put(id, true);
                                         inComment.put(id, true);
-                                        System.out.println("Comment Start: " + id);
+                                        //System.out.println("Comment Start: " + id);
                                         // System.out.println("PlainText: " + String.join("", nonCommentTexts));
                                         // nonCommentTexts.clear();
                                     }
@@ -478,7 +483,7 @@ public class DocumentsService {
                                         BigInteger id = ((CommentRangeEnd) po).getId();
                                         annotationMap.get(id).endAnchor();
                                         inComment.put(id, false);
-                                        System.out.println("Comment End: " + id);
+                                        //System.out.println("Comment End: " + id);
                                         // System.out.println("Anchor: " + String.join("", commentTexts));
                                         // commentTexts.clear();
                                     }
@@ -504,21 +509,21 @@ public class DocumentsService {
                                                         boolean started = commentStarted.get(id);
                                                         if (!started) {
                                                             preCommentText.get(id).addString(text);
-                                                            System.out.println("Adding '" + text + "' to preText for" + id);
+                                                            //System.out.println("Adding '" + text + "' to preText for" + id);
                                                         } else {
                                                             if (inside) {
                                                                 commentedText.get(id).append(text);
-                                                                System.out.println("Adding '" + text + "' to commentedText for" + id);
+                                                                //System.out.println("Adding '" + text + "' to commentedText for" + id);
                                                             } else {
                                                                 postCommentText.get(id).addString(text);
-                                                                System.out.println("Adding '" + text + "' to postText for" + id);
+                                                                //System.out.println("Adding '" + text + "' to postText for" + id);
                                                             }
                                                         }
                                                     });
                                                     PPr ppr = para.getPPr();
                                                     if (ppr != null) {
                                                         PStyle style = ppr.getPStyle();
-                                                        System.out.println("ParaStyle: " + style.getVal());
+                                                        //System.out.println("ParaStyle: " + style.getVal());
                                                         if (style.getVal().equals("Heading1") && title == null) {
                                                             title = text;
                                                             annotationMap.values().forEach(ann -> ann.setDocTitle(text));
@@ -544,27 +549,27 @@ public class DocumentsService {
                         });
 
                         String annStr = jab.build().toString();
-                        System.out.println("Annotations: " + annStr);
+                        //System.out.println("Annotations: " + annStr);
                         annOutputStream.write(annStr.getBytes(StandardCharsets.UTF_8));
                         JsonArrayBuilder oldjab = Json.createArrayBuilder();
                         inComment.forEach((id, inside) -> {
-                            System.out.println("Comment ID: " + id);
+                            //System.out.println("Comment ID: " + id);
                             if (inside && commentStarted.get(id)) {
-                                System.out.println("Never found comment end!");
+                                //System.out.println("Never found comment end!");
                             }
                             if (!commentStarted.get(id)) {
-                                System.out.println("Never found comment!");
+                                //System.out.println("Never found comment!");
                             }
-                            System.out.println("PreText: " + preCommentText.get(id).getString());
-                            System.out.println("DocumentTextBeingCommented: " + commentedText.get(id).toString());
-                            System.out.println("CommentText: " + commentText.get(id).toString());
+                            //System.out.println("PreText: " + preCommentText.get(id).getString());
+                            //System.out.println("DocumentTextBeingCommented: " + commentedText.get(id).toString());
+                            //System.out.println("CommentText: " + commentText.get(id).toString());
 
-                            System.out.println("PostText: " + postCommentText.get(id).getString());
+                            //System.out.println("PostText: " + postCommentText.get(id).getString());
 
                             oldjab.add(createAnnotation(docId, preCommentText.get(id).getString(), commentedText.get(id).toString(), postCommentText.get(id).getString(), commentText.get(id).toString(), theTitle));
                         });
                         annStr = oldjab.build().toString();
-                        System.out.println("\n\nOld Annotations: " + annStr);
+                        //System.out.println("\n\nOld Annotations: " + annStr);
 
                         // This is getting all text
                         String textNodesXPath = "//w:t";
@@ -573,9 +578,9 @@ public class DocumentsService {
                         for (Object obj : textNodes) {
                             Text text = (Text) ((JAXBElement<?>) obj).getValue();
                             String textValue = text.getValue();
-                            System.out.println("Whole Text: " + textValue);
+                            //System.out.println("Whole Text: " + textValue);
                         }
-                        System.out.println("Converted text: |" + convertedText.toString() + "|");
+                        //System.out.println("Converted text: |" + convertedText.toString() + "|");
 
                         // PdfConverter.getInstance().convert(document, pdfOutputStream, options);
 
