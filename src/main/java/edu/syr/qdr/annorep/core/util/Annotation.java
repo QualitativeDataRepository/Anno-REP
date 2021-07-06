@@ -40,6 +40,7 @@ public class Annotation {
     }
 
     public void addText(String newText) {
+        newText = newText.replace("\n","").replace("\r","");
         tqs.addText(newText);
         tps.addText(newText);
     }
