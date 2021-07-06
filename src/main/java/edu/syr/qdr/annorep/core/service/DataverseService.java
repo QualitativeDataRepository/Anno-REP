@@ -51,7 +51,7 @@ public class DataverseService {
     }
 
     public String getPdfPath(long id) {
-        return "/api/access/datafile/" + id + "/metadata/ingestPDF/v1.0";
+        return "/api/access/datafile/" + id + "/auxiliary/ingestPDF/v1.0";
     }
 
     public String getAnnUrl(long id) {
@@ -59,7 +59,7 @@ public class DataverseService {
     }
 
     public String getAnnPath(long id) {
-        return "/api/access/datafile/" + id + "/metadata/annotationJson/v1.0";
+        return "/api/access/datafile/" + id + "/auxiliary/annotationJson/v1.0";
     }
 
     public CloseableHttpClient getHttpClient() {
@@ -198,7 +198,7 @@ public class DataverseService {
         return null;
     }
 
-    public JsonObject addAuxiliaryFile(Long id, Path auxFile, String origin, boolean isPublic, String formatTag, String formatVersion, String apikey) {
+    public JsonObject addAuxiliaryFile(Long id, Path auxFile, String origin, boolean isPublic, String formatTag, String formatVersion, String type, String apikey) {
         try (InputStream is = Files.newInputStream(auxFile, StandardOpenOption.READ)) {
             ContentType cType = ContentType.DEFAULT_BINARY;
 
@@ -207,7 +207,7 @@ public class DataverseService {
             if (mType != null) {
                 cType = ContentType.create(mType);
             }
-            return addAuxiliaryFile(id, is, cType, origin, isPublic, formatTag, formatVersion, apikey);
+            return addAuxiliaryFile(id, is, cType, origin, isPublic, formatTag, formatVersion, type, apikey);
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
@@ -254,8 +254,8 @@ public class DataverseService {
         return false;
     }
 
-    public JsonObject addAuxiliaryFile(Long id, InputStream is, ContentType cType, String origin, boolean isPublic, String formatTag, String formatVersion, String apikey) {
-        HttpPost httpPost = new HttpPost(url + "/api/access/datafile/" + id + "/metadata/" + formatTag + "/" + formatVersion);
+    public JsonObject addAuxiliaryFile(Long id, InputStream is, ContentType cType, String origin, boolean isPublic, String formatTag, String formatVersion, String type, String apikey) {
+        HttpPost httpPost = new HttpPost(url + "/api/access/datafile/" + id + "/auxiliary/" + formatTag + "/" + formatVersion);
         if (apikey != null) {
             httpPost.addHeader("X-Dataverse-key", apikey);
         }
@@ -267,6 +267,7 @@ public class DataverseService {
             MultipartEntityBuilder meb = MultipartEntityBuilder.create();
             meb.addPart("file", bin);
             meb.addTextBody("origin", origin);
+            meb.addTextBody("type", type);
             meb.addTextBody("isPublic", isPublic ? "true" : "false");
 
             HttpEntity reqEntity = meb.build();
