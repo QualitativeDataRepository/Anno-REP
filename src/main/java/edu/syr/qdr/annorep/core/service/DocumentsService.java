@@ -226,6 +226,8 @@ public class DocumentsService {
                         } else if (rotation == 90) {
                             // Do nothing
                         }
+                        log.debug("Added Rectangle " + numHighlights + " : " + x + "," + y + "," + width + "," + height);
+
                         Rectangle2D.Float awtRect = new Rectangle2D.Float(x, y, width, height);
                         // Queue the rectangles
                         stripper.addRegion("" + j, awtRect);
@@ -236,10 +238,18 @@ public class DocumentsService {
                 }
                 // Now get anchor text for all annotations on the page at once
                 stripper.extractRegions(pdfPage);
+                //reset to size at start of page
+                numHighlights=anchorMap.size()- 1;
                 for (int j = 0; j < annotations.size(); j++) {
                     PDAnnotation annot = annotations.get(j);
                     if (annot.getSubtype().equals("Highlight")) {
+                        numHighlights++;
                         String anchorText = stripper.getTextForRegion("" + j);
+                        log.debug("Len: " + anchorText.length());
+                        while(anchorText.endsWith("\n")||anchorText.endsWith("\r")) {
+                            log.debug("Removing " + anchorText.codePointAt(anchorText.length()-1));
+                            anchorText = anchorText.substring(0,anchorText.length()-1);
+                        }
                         // Put the anchor text in the map with the same id as the annotations
                         anchorMap.put(numHighlights, anchorText);
                         log.debug("Anchor text " + numHighlights + ": " + anchorText);

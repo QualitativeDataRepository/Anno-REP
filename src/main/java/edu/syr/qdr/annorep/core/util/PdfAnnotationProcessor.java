@@ -31,7 +31,7 @@ public class PdfAnnotationProcessor {
     int maxAnchorLength = 1024;
 
     /**
-     * In addition to storing hte annotation and anchor maps, the constructor finds
+     * In addition to storing the annotation and anchor maps, the constructor finds
      * the longest anchor and creates a streaming StringFragment used in the
      * processDocument method to allow looking ahead at the incoming text
      * 
@@ -174,7 +174,7 @@ public class PdfAnnotationProcessor {
 
                         String anchor = entry.getValue();
                         int id = entry.getKey();
-                        log.trace("Annotation: " + id);
+                        log.debug("Annotation: " + id);
                         Annotation ann = annotationMap.get(id);
                         Integer endpt = process(anchor, ann, latestFrag, endpts.get(id), maxAnchorLength, testLen);
                         if (endpt == null) {
@@ -221,6 +221,9 @@ public class PdfAnnotationProcessor {
     private Integer process(String anchor, Annotation ann, String latestFrag, Integer endpt, int maxProcessingLength, int testLen) {
         int start = -1;
         // Check to see if we've already found this anchor
+        
+        log.debug(endpt + ": xxx" + anchor + "xxx : " + latestFrag);
+        log.debug("position: " + latestFrag.indexOf(anchor));
         if (endpt == null) {
             // Not yet found, so we look for the anchor to see if it starts in the first
             // half of the current fragment
