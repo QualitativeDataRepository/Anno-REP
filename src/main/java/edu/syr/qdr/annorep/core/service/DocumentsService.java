@@ -534,7 +534,7 @@ public class DocumentsService {
                                                     if (ppr != null) {
                                                         PStyle style = ppr.getPStyle();
                                                         //System.out.println("ParaStyle: " + style.getVal());
-                                                        if (style.getVal().equals("Heading1") && title == null) {
+                                                        if (style != null && style.getVal().equals("Heading1") && title == null) {
                                                             title = text;
                                                             annotationMap.values().forEach(ann -> ann.setDocTitle(text));
                                                         }
