@@ -26,6 +26,7 @@ import org.apache.http.entity.mime.content.InputStreamBody;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import lombok.extern.slf4j.Slf4j;
@@ -34,7 +35,9 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 public class DataverseService {
 
-    private static String url = "https://dv.dev-aws.qdr.org";
+    @Value("${dataverse.url}")
+    private String url = "https://data.stage-aws-new.qdr.org";
+    
     private CloseableHttpClient httpClient = null;
 
     private DataverseService() {
