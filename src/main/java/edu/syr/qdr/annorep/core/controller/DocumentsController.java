@@ -1,6 +1,8 @@
 package edu.syr.qdr.annorep.core.controller;
 
 import java.io.IOException;
+
+import javax.json.JsonObject;
 import javax.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
@@ -47,13 +49,33 @@ public class DocumentsController {
     }
 
     @GetMapping(path = DocumentLinks.ANNOTATION_DOC)
-    public ResponseEntity<?> getAnnotationDocument(@PathVariable long id) {
+    public ResponseEntity<?> getAnnotationDocument(@RequestHeader(name = "X-Dataverse-key") String apikey, @PathVariable long id) {
         log.info("DocumentsController:  get ann");
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("Location", dataverseService.getAnnUrl(id));
-        return new ResponseEntity<String>(headers, HttpStatus.FOUND);
+        Documents d = documentsService.getDocument(id);
+        if(d==null  && apikey != null) {
+            d=documentsService.parseAnnotations(id, apikey, true);
+        }
+        if(d!=null) {
+            return new ResponseEntity<String>(d.getAnnotations(), HttpStatus.OK);
+        } else {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Datafile not yet processed");
+        }
     }
+    
+    @GetMapping(path = DocumentLinks.TITLE_ANNOTATION)
+    public ResponseEntity<?> getTitleAnnotation(@RequestHeader(name = "X-Dataverse-key") String apikey, @PathVariable long id) {
+        log.info("DocumentsController:  get title ann");
+        Documents d = documentsService.getDocument(id);
+        if(d==null && apikey != null) {
+            d=documentsService.parseAnnotations(id, apikey, true);
+        }
+        if(d!=null) {
+            return new ResponseEntity<String>(d.getTitleAnnotation(), HttpStatus.OK);
+        }else {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Datafile not yet processed");
+        }
+    }
+
 
     @PutMapping(path = DocumentLinks.CONVERT_DOC)
     public ResponseEntity<?> convertDoc(@RequestHeader(name = "X-Dataverse-key") String apikey, @PathVariable long id) {

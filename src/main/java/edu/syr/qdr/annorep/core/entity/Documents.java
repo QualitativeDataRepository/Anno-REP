@@ -3,6 +3,9 @@ package edu.syr.qdr.annorep.core.entity;
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Id;
+import javax.persistence.Lob;
+
+import edu.syr.qdr.annorep.core.util.Annotation;
 import lombok.Data;
 
 @Entity
@@ -18,4 +21,11 @@ public class Documents {
 
     @Column
     private String mimetype;
+    
+    @Column(length=2048) 
+    private String titleAnnotation; 
+    
+    @Lob
+    @Column
+    private String annotations;
 }

@@ -12,6 +12,7 @@ import javax.json.Json;
 import javax.json.JsonArray;
 import javax.json.JsonObject;
 import javax.json.JsonReader;
+import javax.json.JsonValue;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.client.ClientProtocolException;
@@ -73,7 +74,7 @@ public class DataverseService {
 
     }
 
-    public JsonObject getAPIJsonResponse(String apiPath, String apikey) throws Exception {
+    public JsonValue getAPIJsonResponse(String apiPath, String apikey) throws Exception {
         log.info("Getting: " + apiPath);
         HttpGet httpGet = new HttpGet(url + apiPath);
         if (apikey != null) {
@@ -82,6 +83,7 @@ public class DataverseService {
         try {
             CloseableHttpResponse response = getHttpClient().execute(httpGet);
             String data = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+            log.debug("Return from " + apiPath+ ": " + data);
             int status = response.getStatusLine().getStatusCode(); 
             if ( status == 404) {
                 return Json.createObjectBuilder().build();
@@ -89,7 +91,7 @@ public class DataverseService {
                 throw new Exception("Response code: " + response.getStatusLine().getStatusCode() + ", " + data);
             }
             JsonReader r = Json.createReader(new StringReader(data));
-            return r.readObject();
+            return r.readValue();
         } catch (IOException ioe) {
             log.error("IOException getting url", ioe);
             throw new Exception("IOException getting url", ioe);

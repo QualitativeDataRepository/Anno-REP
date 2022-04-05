@@ -29,6 +29,7 @@ public class PdfAnnotationProcessor {
     Map<Integer, String> anchorMap = null;
     StringFragment fragment = null;
     int maxAnchorLength = 1024;
+    final int titleId = -1;
 
     /**
      * In addition to storing the annotation and anchor maps, the constructor finds
@@ -71,6 +72,7 @@ public class PdfAnnotationProcessor {
         PDFTextStripper textStripper = new PDFTextStripper();
         // This adds \r\n between paragraphs which is ~ how they are represented in the
         // docx processing
+        textStripper.setSortByPosition(true);
         textStripper.setAddMoreFormatting(true);
         PipedWriter pWriter = new PipedWriter();
         try {
@@ -120,13 +122,16 @@ public class PdfAnnotationProcessor {
                         if (text.contains("\r")) {
                             int pos = text.indexOf('\r');
                             // Strip initial \r\n if the exist
-                            log.debug("Pos: " + pos);
+                            log.trace("Pos: " + pos);
                             if (pos == 0 && titleB.length() == 0) {
                                 do {
                                     text = text.substring(1);
                                 } while (text.indexOf('\r') == 0 || text.indexOf('\n') == 0);
                                 log.debug("Cur Text: " + text);
-                                pos = text.indexOf('\r');
+                                //Now look for a blank line
+                                int pos1 = text.indexOf("\r\r");
+                                int pos2 = text.indexOf("\r\n\r");
+                                pos = Math.max(pos1, pos2);
                             }
                             if (pos > 0) {
                                 titleB.append(text.substring(0, pos));
@@ -139,21 +144,28 @@ public class PdfAnnotationProcessor {
                                 for (Annotation ann : annotationMap.values()) {
                                     ann.setDocTitle(title);
                                 }
+                                anchorMap.put(titleId, title);
                             } else {
                                 // We have nothing or part of the title, so add it to the buffer.
                                 titleB.append(text);
+                                if(title==null) {
+                                  anchorMap.put(titleId, text + "partial title found");
+                                }
                             }
                         } else {
                             // Whole string is text, add it to the buffer
                             titleB.append(text);
+                            if(title==null) {
+                              anchorMap.put(titleId, text + "partial title found");
+                            }
                         }
                     }
-                    log.debug("Partial title: " + titleB.length() + " : " + titleB.toString());
+                    log.trace("Partial title: " + titleB.length() + " : " + titleB.toString());
                     // Annotation anchor discovery. Start by adding the newly read string to the
                     // fragment we're using. (Note - we can't use the text variable from above as it
                     // has \r\n chars removed and we want those.
                     fragment.addString(String.valueOf(buf, 0, charsRead));
-                    log.debug("Frag is: " + fragment.getString());
+                    log.trace("Frag is: " + fragment.getString());
                     // General algorithm: Look in current fragment for each anchor. Using
                     // 2*maxAnchorLegnth chars as a buffer size and only removing maxAnhorLength
                     // chars each time assures that we will always find each anchor contained in the
@@ -169,12 +181,12 @@ public class PdfAnnotationProcessor {
                         // Since read blocks, this should only occur at the end of the doc.
                         latestFrag = latestFrag.substring(maxAnchorLength - charsRead);
                     }
-                    log.debug("Frag is " + latestFrag);
+                    log.trace("Frag is " + latestFrag);
                     for (Entry<Integer, String> entry : anchorMap.entrySet()) {
 
                         String anchor = entry.getValue();
                         int id = entry.getKey();
-                        log.debug("Annotation: " + id);
+                        log.trace("Annotation: " + id);
                         Annotation ann = annotationMap.get(id);
                         Integer endpt = process(anchor, ann, latestFrag, endpts.get(id), maxAnchorLength, testLen);
                         if (endpt == null) {
@@ -189,15 +201,15 @@ public class PdfAnnotationProcessor {
                     }
                     // Increment the number of chars read (used only in logging)
                     testLen += charsRead;
-                    log.debug("Processed: " + testLen);
-                    log.debug("CurrentFrag: " + latestFrag);
+                    log.trace("Processed: " + testLen);
+                    log.trace("CurrentFrag: " + latestFrag);
                 }
                 // Done reading from doc, so process the remaining chars in the buffer
                 String lastFrag = latestFrag; 
                 if(latestFrag.length()>maxAnchorLength) {
                     lastFrag=lastFrag.substring(maxAnchorLength);
                 }
-                log.debug("Final fragment is " + lastFrag);
+                log.trace("Final fragment is " + lastFrag);
                 for (Entry<Integer, String> entry : anchorMap.entrySet()) {
                     String anchor = entry.getValue();
                     int id = entry.getKey();
@@ -222,8 +234,8 @@ public class PdfAnnotationProcessor {
         int start = -1;
         // Check to see if we've already found this anchor
         
-        log.debug(endpt + ": xxx" + anchor + "xxx : " + latestFrag);
-        log.debug("position: " + latestFrag.indexOf(anchor));
+        log.trace(endpt + ": xxx" + anchor + "xxx : " + latestFrag);
+        log.trace("position: " + latestFrag.indexOf(anchor));
         if (endpt == null) {
             // Not yet found, so we look for the anchor to see if it starts in the first
             // half of the current fragment
