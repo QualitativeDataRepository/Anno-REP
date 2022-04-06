@@ -437,20 +437,20 @@ public class DocumentsService {
 
                         //Todo - handle null cPart
                         CommentsPart cPart = mainDocumentPart.getCommentsPart();
-
-                        RelationshipsPart rPart = cPart.getRelationshipsPart(false);
-                        if(rPart!=null) {
-                          Relationships rels = rPart.getRelationships();
-                          if(rels!=null) {
-                              List<Relationship> relList = rels.getRelationship();
-                              relList.forEach((Relationship r) -> {
-                                  commentRelationshipMap.put(r.getId(), r.getTarget());
-                                  System.out.println("RTarg: " + r.getTarget());
-                                  System.out.println("RId: " + r.getId());
-                              });
-                          }
+                        if (cPart != null) {
+                            RelationshipsPart rPart = cPart.getRelationshipsPart(false);
+                            if (rPart != null) {
+                                Relationships rels = rPart.getRelationships();
+                                if (rels != null) {
+                                    List<Relationship> relList = rels.getRelationship();
+                                    relList.forEach((Relationship r) -> {
+                                        commentRelationshipMap.put(r.getId(), r.getTarget());
+                                        System.out.println("RTarg: " + r.getTarget());
+                                        System.out.println("RId: " + r.getId());
+                                    });
+                                }
+                            }
                         }
-
                         // Create faux Title Comment:
                         BigInteger titleId = BigInteger.valueOf(-1);
                         annotationMap.put(titleId, new Annotation());
@@ -458,7 +458,11 @@ public class DocumentsService {
                         postCommentText.put(titleId, new StringFragment(ANCHOR_SIZE, false));
                         commentedText.put(titleId, new StringBuilder());
                         commentText.put(titleId, new StringBuilder(PLACEHOLDER_TEXT));
-                        List<Comment> comments = cPart.getContents().getComment();
+                        List<Comment> comments = new ArrayList<Comment>();
+                        if(cPart!=null) {
+                            comments = cPart.getContents().getComment();
+                        }
+                        
                         for (Comment c : comments) {
                             // System.out.println(c.getAuthor());
                             // System.out.println(c.getDate().toString());
