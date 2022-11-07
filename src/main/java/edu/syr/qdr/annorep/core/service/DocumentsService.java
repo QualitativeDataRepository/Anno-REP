@@ -3,6 +3,8 @@ package edu.syr.qdr.annorep.core.service;
 import java.awt.geom.Rectangle2D;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.InputStream;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
@@ -13,12 +15,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import javax.json.Json;
-import javax.json.JsonArray;
-import javax.json.JsonArrayBuilder;
-import javax.json.JsonObject;
-import javax.json.JsonObjectBuilder;
-import javax.json.JsonValue;
+import com.aspose.words.*;
+
+import jakarta.json.Json;
+import jakarta.json.JsonArray;
+import jakarta.json.JsonArrayBuilder;
+import jakarta.json.JsonObjectBuilder;
+import jakarta.json.JsonValue;
 import javax.xml.bind.JAXBElement;
 
 import org.apache.http.entity.ContentType;
@@ -28,6 +31,7 @@ import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotation;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.pdfbox.text.PDFTextStripperByArea;
+import org.apache.poi.openxml4j.util.ZipSecureFile;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.docx4j.openpackaging.packages.WordprocessingMLPackage;
 import org.docx4j.openpackaging.parts.WordprocessingML.CommentsPart;
@@ -50,7 +54,6 @@ import org.docx4j.wml.Text;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import ch.qos.logback.classic.Logger;
 import edu.syr.qdr.annorep.core.entity.Documents;
 import edu.syr.qdr.annorep.core.repository.DocumentsRepository;
 import edu.syr.qdr.annorep.core.util.Annotation;
@@ -155,8 +158,8 @@ public class DocumentsService {
         case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
 
             try (InputStream docIn = dataverseService.getFile(id, apikey);) {
-                dataverseService.addAuxiliaryFile(id, createPdfFromDocx(docIn), ContentType.create("application/pdf", StandardCharsets.UTF_8), "AnnoRep", false, "ingestPDF", "v1.0", "AR", apikey);
-            } catch (IOException e) {
+                dataverseService.addAuxiliaryFile(id, createPdfFromDocxAspose(docIn), ContentType.create("application/pdf", StandardCharsets.UTF_8), "AnnoRep", false, "ingestPDF", "v1.0", "AR", apikey);
+            } catch (Exception e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
             }
@@ -192,6 +195,7 @@ public class DocumentsService {
         Map<Integer, String> anchorMap = new HashMap<Integer, String>();
 
         try {
+            ZipSecureFile.setMinInflateRatio(0.001);
             PDDocument document;
             document = Loader.loadPDF(pdfInputStream);
 
@@ -360,10 +364,18 @@ public class DocumentsService {
         }
     }
 
+    private InputStream createPdfFromDocxAspose(InputStream docInputStream) throws Exception{
+    Document wordDoc = new com.aspose.words.Document(docInputStream);
+  //convert docx to pdf
+  wordDoc.save("d:/git/Anno-Rep/target/Output.pdf");
+  log.info("Done with Aspose");
+  return new FileInputStream(new File("d:/git/Anno-Rep/target/Output.pdf"));
+    }
+  
     private InputStream createPdfFromDocx(InputStream docInputStream) {
         PipedInputStream pdfInputStream = new PipedInputStream();
         try {
-
+            ZipSecureFile.setMinInflateRatio(0.001);
             new Thread(new Runnable() {
                 public void run() {
                     try (PipedOutputStream pdfOutputStream = new PipedOutputStream(pdfInputStream)) {

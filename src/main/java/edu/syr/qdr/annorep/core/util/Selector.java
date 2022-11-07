@@ -1,6 +1,6 @@
 package edu.syr.qdr.annorep.core.util;
 
-import javax.json.JsonObject;
+import jakarta.json.JsonObject;
 
 public abstract class Selector {
 

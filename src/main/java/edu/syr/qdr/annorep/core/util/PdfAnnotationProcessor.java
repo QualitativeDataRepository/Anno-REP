@@ -3,15 +3,14 @@ package edu.syr.qdr.annorep.core.util;
 import java.io.IOException;
 import java.io.PipedReader;
 import java.io.PipedWriter;
-import java.math.BigInteger;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 
-import edu.syr.qdr.annorep.core.controller.DocumentsController;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -165,7 +164,7 @@ public class PdfAnnotationProcessor {
                     // fragment we're using. (Note - we can't use the text variable from above as it
                     // has \r\n chars removed and we want those.
                     fragment.addString(String.valueOf(buf, 0, charsRead));
-                    log.trace("Frag is: " + fragment.getString());
+                    //log.trace("Frag is: " + fragment.getString());
                     // General algorithm: Look in current fragment for each anchor. Using
                     // 2*maxAnchorLegnth chars as a buffer size and only removing maxAnhorLength
                     // chars each time assures that we will always find each anchor contained in the
@@ -181,7 +180,7 @@ public class PdfAnnotationProcessor {
                         // Since read blocks, this should only occur at the end of the doc.
                         latestFrag = latestFrag.substring(maxAnchorLength - charsRead);
                     }
-                    log.trace("Frag is " + latestFrag);
+                    //log.trace("Frag is " + latestFrag);
                     for (Entry<Integer, String> entry : anchorMap.entrySet()) {
 
                         String anchor = entry.getValue();
@@ -202,7 +201,7 @@ public class PdfAnnotationProcessor {
                     // Increment the number of chars read (used only in logging)
                     testLen += charsRead;
                     log.trace("Processed: " + testLen);
-                    log.trace("CurrentFrag: " + latestFrag);
+                    //log.trace("CurrentFrag: " + latestFrag);
                 }
                 // Done reading from doc, so process the remaining chars in the buffer
                 String lastFrag = latestFrag; 
@@ -234,12 +233,21 @@ public class PdfAnnotationProcessor {
         int start = -1;
         // Check to see if we've already found this anchor
         
-        log.trace(endpt + ": xxx" + anchor + "xxx : " + latestFrag);
-        log.trace("position: " + latestFrag.indexOf(anchor));
+        if(latestFrag.indexOf(anchor) >=0) {
+            log.trace("position: " + latestFrag.indexOf(anchor));
+            log.trace(endpt + ": xxx" + anchor + "xxx : " + latestFrag);
+            log.trace(latestFrag);
+        }
         if (endpt == null) {
             // Not yet found, so we look for the anchor to see if it starts in the first
             // half of the current fragment
-            if ((start = latestFrag.indexOf(anchor)) > -1 && start < maxProcessingLength) {
+            start = latestFrag.indexOf(anchor);
+            if (start > -1 && (start + anchor.length()) < maxProcessingLength) {
+                String postAnchorText = latestFrag.substring(start + anchor.length(), maxProcessingLength);
+                String cleanedAnchor = cleanAnchor(anchor, postAnchorText);
+                if (cleanedAnchor.length() < anchor.length()) {
+                    anchor = cleanedAnchor;
+                }
                 // We've found the anchor (or another place in the doc with the exact same
                 // text!)
                 log.debug("Anchor found at relative position " + start);
@@ -254,7 +262,10 @@ public class PdfAnnotationProcessor {
                 // buffer, just the first part
                 if ((start + anchor.length()) <= maxProcessingLength) {
                     log.debug("Adding anchor: " + latestFrag.substring(start, start + anchor.length()));
-                    ann.addText(latestFrag.substring(start, start + anchor.length()));
+                    
+                   
+                    
+                    ann.addText(anchor);
                     // If we have the whole anchor, send the end event and add any remaining text in
                     // the first half of the buffer to the annotation
                     ann.endAnchor();
@@ -289,6 +300,34 @@ public class PdfAnnotationProcessor {
             }
             return -1;
         }
+    }
+
+    private String cleanAnchor(String anchor, String postAnchorText) {
+        // If the anchor ends in a non-space character that is the start of a word
+        // (which continues with non-space chars in the postAnchorText) or is a space
+        // char, truncate the anchor.
+        int initialLength = anchor.length();
+        anchor = StringUtils.stripEnd(anchor, null);
+        // If it ends in whitespace
+        if (anchor.length() < initialLength) {
+            return anchor;
+        } else {
+            // If the postAnchorText contains the rest of the word (doesn't start with
+            // whitepsace)
+            if (!Character.isWhitespace(postAnchorText.charAt(0))) {
+                // Find the last word break
+                int lastWhitespace = StringUtils.lastIndexOfAny(anchor, " ", "\t", "\r", "\n");
+                // If that occurs after the first char
+                if (lastWhitespace > 0) {
+                    // return the substring without the partial word and last word break
+                    anchor = anchor.substring(0, lastWhitespace);
+                }
+            }
+        }
+        if(anchor.length() < initialLength) {
+            log.info("Truncating anchor to " + anchor);
+        }
+        return anchor;
     }
 
 }

@@ -2,7 +2,6 @@ package edu.syr.qdr.annorep.core.controller;
 
 import java.io.IOException;
 
-import javax.json.JsonObject;
 import javax.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
