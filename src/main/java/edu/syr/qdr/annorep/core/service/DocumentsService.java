@@ -8,12 +8,15 @@ import java.io.FileInputStream;
 import java.io.InputStream;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
+import java.io.StringReader;
+import java.io.StringWriter;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 import com.aspose.words.*;
 
@@ -23,8 +26,17 @@ import jakarta.json.JsonArrayBuilder;
 import jakarta.json.JsonObjectBuilder;
 import jakarta.json.JsonValue;
 import javax.xml.bind.JAXBElement;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
 
 import org.apache.http.entity.ContentType;
+import org.apache.pdfbox.cos.COSString;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
@@ -53,6 +65,7 @@ import org.docx4j.wml.RPr;
 import org.docx4j.wml.Text;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.xml.sax.InputSource;
 
 import edu.syr.qdr.annorep.core.entity.Documents;
 import edu.syr.qdr.annorep.core.repository.DocumentsRepository;
@@ -64,6 +77,9 @@ import fr.opensagres.poi.xwpf.converter.pdf.PdfOptions;
 import lombok.extern.slf4j.Slf4j;
 
 import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.cos.COSArray;
+import org.apache.pdfbox.cos.COSBase;
+import org.apache.pdfbox.cos.COSName;
 
 @Slf4j
 @Component
@@ -240,7 +256,51 @@ public class DocumentsService {
                         // Create an annotation for this highlight comment
                         annMap.put(numHighlights, ann);
                         // Add the comment text
-                        ann.appendCommentText(annot.getContents());
+                      //To get the rich/html text version of an annotation, one has to dig
+                        boolean foundRichText=false;
+                        for(Entry<COSName, COSBase> entry:annot.getCOSObject().entrySet()) {
+                            //Not sure what RC stands for but this is the xhtml version of the text with spans with font sizes, weights, etc. 
+                            if(entry.getKey().getName().equals("RC")) {
+                                String val = ((COSString)entry.getValue()).getString();
+                                //The string has an xml header and a body element, we just want the child nodes in the body
+                                //So convert to an XML representation and then write the children back to a string
+                                DocumentBuilder builder;
+                                try  
+                                {  
+                                    builder = DocumentBuilderFactory.newInstance().newDocumentBuilder();  
+                                    org.w3c.dom.Document doc = builder.parse( new InputSource( new StringReader( val) ) );
+                                    TransformerFactory tf = TransformerFactory.newInstance();
+                                    Transformer transformer;
+                                    try {
+                                        transformer = tf.newTransformer();
+                                        // remove XML declaration
+                                        transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+                                        StringWriter writer = new StringWriter();
+                                        //Get child nodes
+                                        org.w3c.dom.NodeList nl = doc.getElementsByTagName("body").item(0).getChildNodes();
+                                        //Write each to the output string
+                                        for(int n=0;n<nl.getLength();n++ ) {
+                                            transformer.transform(new DOMSource(nl.item(n)), new StreamResult(writer));
+                                        }
+                                        //transformer.transform(new DOMSource(doc.getElementsByTagName("body").item(0)), new StreamResult(writer));
+                                        ann.appendCommentText(writer.getBuffer().toString());
+                                        foundRichText=true;
+                                        //log.info("Transformed output: " +output);
+                                    } catch (TransformerException e) {
+                                        e.printStackTrace();
+                                    }
+                                } catch (Exception e) {
+                                    log.warn("Exception: Using plain text for annotation");
+                                    e.printStackTrace();
+                                    ann.appendCommentText(annot.getContents());
+                                } 
+                                break;
+                            }
+                        }
+                        if(!foundRichText) {
+                            log.warn("Didn't find rich Text for " + annot.getContents());
+                            ann.appendCommentText(annot.getContents());
+                        }
                         // Get the rectangle that is highlighted so we can find the anchor text
                         PDRectangle rect = annot.getRectangle();
                         log.debug("Highlighted Rectangle " + numHighlights + " : " + rect.getLowerLeftX() + "," + rect.getLowerLeftY() + "," + rect.getUpperRightX() + "," + rect.getUpperRightY());
