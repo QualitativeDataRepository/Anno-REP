@@ -11,7 +11,9 @@ import java.io.PipedOutputStream;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.math.BigInteger;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.security.DigestInputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -19,6 +21,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import com.aspose.words.*;
+
 
 import jakarta.json.Json;
 import jakarta.json.JsonArray;
@@ -62,7 +65,14 @@ import org.docx4j.wml.PPr;
 import org.docx4j.wml.PPrBase.PStyle;
 import org.docx4j.wml.R;
 import org.docx4j.wml.RPr;
+import org.docx4j.wml.Tbl;
+import org.docx4j.wml.Tc;
 import org.docx4j.wml.Text;
+import org.docx4j.wml.Tr;
+import org.jodconverter.core.document.DefaultDocumentFormatRegistry;
+import org.jodconverter.core.office.OfficeUtils;
+import org.jodconverter.local.JodConverter;
+import org.jodconverter.local.office.LocalOfficeManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.xml.sax.InputSource;
@@ -90,6 +100,8 @@ public class DocumentsService {
     protected static final int ANCHOR_SIZE = 32;
     final static String PLACEHOLDER_TEXT = "PLACEHOLDER TEXT";
 
+    boolean success = false;
+    
     @Autowired
     DataverseService dataverseService;
 
@@ -174,7 +186,7 @@ public class DocumentsService {
         case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
 
             try (InputStream docIn = dataverseService.getFile(id, apikey);) {
-                dataverseService.addAuxiliaryFile(id, createPdfFromDocxAspose(docIn), ContentType.create("application/pdf", StandardCharsets.UTF_8), "AnnoRep", false, "ingestPDF", "v1.0", "AR", apikey);
+                dataverseService.addAuxiliaryFile(id, createPdfFromDocxJODC(docIn), ContentType.create("application/pdf", StandardCharsets.UTF_8), "AnnoRep", false, "ingestPDF", "v1.0", "AR", apikey);
             } catch (Exception e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
@@ -427,10 +439,40 @@ public class DocumentsService {
     private InputStream createPdfFromDocxAspose(InputStream docInputStream) throws Exception{
     Document wordDoc = new com.aspose.words.Document(docInputStream);
   //convert docx to pdf
-  wordDoc.save("d:/git/Anno-Rep/target/Output.pdf");
+  wordDoc.save("./Output.pdf");
   log.info("Done with Aspose");
-  return new FileInputStream(new File("d:/git/Anno-Rep/target/Output.pdf"));
+  return new FileInputStream(new File("./Output.pdf"));
     }
+
+    private InputStream createPdfFromDocxJODC(InputStream docInputStream) throws Exception{
+
+        // Create an office manager using the default configuration.
+        // The default port is 2002. Note that when an office manager
+        // is installed, it will be the one used by default when
+        // a converter is created.
+        final LocalOfficeManager officeManager = LocalOfficeManager.install();
+
+        try {
+
+            // Start an office process and connect to the started instance (on port 2002).
+            officeManager.start();
+            File outputFile = new File("./JODCOutput.pdf");
+
+            JodConverter
+                    .convert(docInputStream)
+                    .as(DefaultDocumentFormatRegistry.DOCX)
+                    .to(outputFile)
+                    .as(DefaultDocumentFormatRegistry.PDF)
+                    .execute();
+            
+            return new FileInputStream(outputFile);
+        } finally {
+            log.info("Done with JODC");
+            // Stop the office process
+            OfficeUtils.stopQuietly(officeManager);
+        }
+    }
+ 
   
     private InputStream createPdfFromDocx(InputStream docInputStream) {
         PipedInputStream pdfInputStream = new PipedInputStream();
@@ -495,7 +537,7 @@ public class DocumentsService {
                     Map<BigInteger, StringBuilder> commentedText = new HashMap<BigInteger, StringBuilder>();
                     // The comment itself.
                     Map<BigInteger, StringBuilder> commentText = new HashMap<BigInteger, StringBuilder>();
-                    String title = null;
+                    StringBuilder title = new StringBuilder();
                     Map<String, String> commentRelationshipMap = new HashMap<String, String>();
 
                     StringBuilder convertedText = new StringBuilder();
@@ -603,122 +645,38 @@ public class DocumentsService {
                         });
                         boolean firstPara = true;
                         for (Object o : mainDocumentPart.getContent()) {
-
-                            if (o instanceof P) {
-                                P para = (P) o;
-
-                                final String paraSep = "\n\n";
-                                if (!firstPara) {
-                                    annotationMap.values().forEach(ann -> {
-                                        ann.addText(paraSep);
-                                    });
-                                    convertedText.append(paraSep);
-
-                                    inComment.forEach((id, inside) -> {
-
-                                        boolean started = commentStarted.get(id);
-                                        if (!started) {
-                                            preCommentText.get(id).addString(paraSep);
-                                            // System.out.println("Adding '" + paraSep + "' to preText for" + id);
-                                        } else {
-                                            if (inside) {
-                                                commentedText.get(id).append(paraSep);
-                                                // System.out.println("Adding '" + paraSep + "' to commentedText for" + id);
-                                            } else {
-                                                postCommentText.get(id).addString(paraSep);
-                                                // System.out.println("Adding '" + paraSep + "' to postText for" + id);
-                                            }
-                                        }
-                                    });
-
-                                } else {
-                                    firstPara = false;
-                                }
-                                for (Object po : para.getContent()) {
-                                    // System.out.println("PO: " + po.getClass().getCanonicalName());
-                                    if (po instanceof CommentRangeStart) {
-                                        // ToDo = get id and handle overlapping comments
-                                        BigInteger id = ((CommentRangeStart) po).getId();
-                                        annotationMap.get(id).startAnchor();
-                                        commentStarted.put(id, true);
-                                        inComment.put(id, true);
-                                        // System.out.println("Comment Start: " + id);
-                                        // System.out.println("PlainText: " + String.join("", nonCommentTexts));
-                                        // nonCommentTexts.clear();
-                                    }
-                                    if (po instanceof CommentRangeEnd) {
-                                        BigInteger id = ((CommentRangeEnd) po).getId();
-                                        annotationMap.get(id).endAnchor();
-                                        inComment.put(id, false);
-                                        // System.out.println("Comment End: " + id);
-                                        // System.out.println("Anchor: " + String.join("", commentTexts));
-                                        // commentTexts.clear();
-                                    }
-
-                                    if (po instanceof R) {
-                                        for (Object ro : ((R) po).getContent()) {
-                                            // System.out.println("RO: " + ro.getClass().getCanonicalName());
-
-                                            if (ro instanceof JAXBElement) {
-                                                JAXBElement<?> jb = (JAXBElement<?>) ro;
-                                                // System.out.println(jb.getName());
-                                                // System.out.println(jb.getDeclaredType());
-                                                // System.out.println(jb.getValue().getClass().getCanonicalName());
-                                                if (jb.getValue() instanceof Text) {
-                                                    String text = ((Text) jb.getValue()).getValue();
-
-                                                    PPr ppr = para.getPPr();
-                                                    if (ppr != null) {
-                                                        PStyle style = ppr.getPStyle();
-                                                        // System.out.println("ParaStyle: " + style.getVal());
-                                                        if (style != null && style.getVal().equals("Heading1") && title == null) {
-                                                            title = text;
-                                                            annotationMap.values().forEach(ann -> ann.setDocTitle(text));
-                                                            annotationMap.get(titleId).startAnchor();
-                                                            commentStarted.put(titleId, true);
-                                                            inComment.put(titleId, true);
-                                                        }
+                            log.info("Class is " + o.getClass().getCanonicalName());
+                            if (o instanceof JAXBElement && ((JAXBElement)o).getDeclaredType().equals(Tbl.class)) {
+                                /* Find Tr rows, and Tc which then contains P and same substructure */
+                                Object q = ((JAXBElement)o).getValue();
+                                log.info("Value class is: " + q.getClass().getCanonicalName());
+                                for (Object to : ((Tbl) q).getContent()) {
+                                    log.info("Class of to is " + to.getClass().getCanonicalName());
+                                    if (to instanceof Tr) {
+                                        log.info("Found row");
+                                        for (Object tro : ((Tr) to).getContent()) {
+                                            log.info("Class of tro is " + tro.getClass().getCanonicalName());
+                                            if (tro instanceof JAXBElement && ((JAXBElement)tro).getDeclaredType().equals(Tc.class)) {
+                                                log.info("Found tc");
+                                                for (Object tco : ((Tc)((JAXBElement) tro).getValue()).getContent()) {
+                                                    if (tco instanceof P) {
+                                                        log.info("Found P in Tbl");
+                                                        processParagraph(((P) tco), firstPara, annotationMap, commentStarted, convertedText, inComment, preCommentText, postCommentText, commentedText, title, titleId);
                                                     }
-
-                                                    // When text is found iterate through
-                                                    annotationMap.values().forEach(ann -> {
-                                                        ann.addText(text);
-                                                    });
-                                                    convertedText.append(text);
-
-                                                    inComment.forEach((id, inside) -> {
-                                                        boolean started = commentStarted.get(id);
-                                                        if (!started) {
-                                                            preCommentText.get(id).addString(text);
-                                                            // System.out.println("Adding '" + text + "' to preText for" + id);
-                                                        } else {
-                                                            if (inside) {
-                                                                commentedText.get(id).append(text);
-                                                                // System.out.println("Adding '" + text + "' to commentedText for" + id);
-                                                            } else {
-                                                                postCommentText.get(id).addString(text);
-                                                                // System.out.println("Adding '" + text + "' to postText for" + id);
-                                                            }
-                                                        }
-                                                    });
-                                                    if (title != null) {
-                                                        annotationMap.get(titleId).endAnchor();
-                                                        inComment.put(titleId, false);
-                                                    }
-                                                    /*
-                                                     * if (inComment) { commentTexts.add(((Text) jb.getValue()).getValue()); } else
-                                                     * { nonCommentTexts.add(((Text) jb.getValue()).getValue()); }
-                                                     */
                                                 }
                                             }
                                         }
                                     }
                                 }
                             }
+                            if (o instanceof P) {
+                                P para = (P) o;
+                                processParagraph(para, firstPara, annotationMap, commentStarted, convertedText, inComment, preCommentText, postCommentText, commentedText, title, titleId);
+                            }
 
                         }
                         JsonArrayBuilder jab = Json.createArrayBuilder();
-                        final String theTitle = title;
+                        final String theTitle = title.toString();
 
                         // ToDo - could write the annotations/title to the Document now, but we're in a
                         // thread with no context
@@ -768,6 +726,116 @@ public class DocumentsService {
                         log.error("Error creating ann: " + e.getMessage());
                         e.printStackTrace();
                         throw new RuntimeException("Error creating ann: " + e.getMessage());
+                    }
+                }
+
+                private void processParagraph(P para, boolean firstPara, Map<BigInteger, Annotation> annotationMap, Map<BigInteger, Boolean> commentStarted, StringBuilder convertedText, Map<BigInteger, Boolean> inComment, Map<BigInteger, StringFragment> preCommentText, Map<BigInteger, StringFragment> postCommentText, Map<BigInteger, StringBuilder> commentedText, StringBuilder title, BigInteger titleId) {
+                    final String paraSep = "\n\n";
+                    if (!firstPara) {
+                        annotationMap.values().forEach(ann -> {
+                            ann.addText(paraSep);
+                        });
+                        convertedText.append(paraSep);
+
+                        inComment.forEach((id, inside) -> {
+
+                            boolean started = commentStarted.get(id);
+                            if (!started) {
+                                preCommentText.get(id).addString(paraSep);
+                                // System.out.println("Adding '" + paraSep + "' to preText for" + id);
+                            } else {
+                                if (inside) {
+                                    commentedText.get(id).append(paraSep);
+                                    // System.out.println("Adding '" + paraSep + "' to commentedText for" + id);
+                                } else {
+                                    postCommentText.get(id).addString(paraSep);
+                                    // System.out.println("Adding '" + paraSep + "' to postText for" + id);
+                                }
+                            }
+                        });
+
+                    } else {
+                        firstPara = false;
+                    }
+                    for (Object po : para.getContent()) {
+                        // System.out.println("PO: " + po.getClass().getCanonicalName());
+                        if (po instanceof CommentRangeStart) {
+                            // ToDo = get id and handle overlapping comments
+                            BigInteger id = ((CommentRangeStart) po).getId();
+                            annotationMap.get(id).startAnchor();
+                            commentStarted.put(id, true);
+                            inComment.put(id, true);
+                            log.info("Comment Start: " + id);
+                            // System.out.println("PlainText: " + String.join("", nonCommentTexts));
+                            // nonCommentTexts.clear();
+                        }
+                        if (po instanceof CommentRangeEnd) {
+                            BigInteger id = ((CommentRangeEnd) po).getId();
+                            annotationMap.get(id).endAnchor();
+                            inComment.put(id, false);
+                            log.info("Comment End: " + id);
+                            // System.out.println("Anchor: " + String.join("", commentTexts));
+                            // commentTexts.clear();
+                        }
+
+                        if (po instanceof R) {
+                            for (Object ro : ((R) po).getContent()) {
+                                // System.out.println("RO: " + ro.getClass().getCanonicalName());
+
+                                if (ro instanceof JAXBElement) {
+                                    JAXBElement<?> jb = (JAXBElement<?>) ro;
+                                    // System.out.println(jb.getName());
+                                    // System.out.println(jb.getDeclaredType());
+                                    // System.out.println(jb.getValue().getClass().getCanonicalName());
+                                    if (jb.getValue() instanceof Text) {
+                                        String text = ((Text) jb.getValue()).getValue();
+                                        log.info("Found text: " + text);
+                                        PPr ppr = para.getPPr();
+                                        if (ppr != null) {
+                                            PStyle style = ppr.getPStyle();
+                                            // System.out.println("ParaStyle: " + style.getVal());
+                                            if (style != null && style.getVal().equals("Heading1") && title.length() == 0) {
+                                                title.append(text);
+                                                annotationMap.values().forEach(ann -> ann.setDocTitle(text));
+                                                annotationMap.get(titleId).startAnchor();
+                                                commentStarted.put(titleId, true);
+                                                inComment.put(titleId, true);
+                                            }
+                                        }
+
+                                        // When text is found iterate through
+                                        annotationMap.values().forEach(ann -> {
+                                            ann.addText(text);
+                                        });
+                                        convertedText.append(text);
+
+                                        inComment.forEach((id, inside) -> {
+                                            boolean started = commentStarted.get(id);
+                                            if (!started) {
+                                                preCommentText.get(id).addString(text);
+                                                log.info("Adding '" + text + "' to preText for" + id);
+                                            } else {
+                                                if (inside) {
+                                                    commentedText.get(id).append(text);
+                                                    log.info("Adding '" + text + "' to commentedText for" + id);
+                                                } else {
+                                                    postCommentText.get(id).addString(text);
+                                                    log.info("Adding '" + text + "' to postText for" + id);
+                                                }
+                                            }
+                                        });
+                                        if (title != null) {
+                                            annotationMap.get(titleId).endAnchor();
+                                            inComment.put(titleId, false);
+                                        }
+                                        /*
+                                         * if (inComment) { commentTexts.add(((Text) jb.getValue()).getValue()); } else
+                                         * { nonCommentTexts.add(((Text) jb.getValue()).getValue()); }
+                                         */
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
