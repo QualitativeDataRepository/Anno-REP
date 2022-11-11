@@ -436,14 +436,6 @@ public class DocumentsService {
         }
     }
 
-    private InputStream createPdfFromDocxAspose(InputStream docInputStream) throws Exception{
-    Document wordDoc = new com.aspose.words.Document(docInputStream);
-  //convert docx to pdf
-  wordDoc.save("./Output.pdf");
-  log.info("Done with Aspose");
-  return new FileInputStream(new File("./Output.pdf"));
-    }
-
     private InputStream createPdfFromDocxJODC(InputStream docInputStream) throws Exception{
 
         // Create an office manager using the default configuration.
@@ -645,22 +637,15 @@ public class DocumentsService {
                         });
                         boolean firstPara = true;
                         for (Object o : mainDocumentPart.getContent()) {
-                            log.info("Class is " + o.getClass().getCanonicalName());
-                            if (o instanceof JAXBElement && ((JAXBElement)o).getDeclaredType().equals(Tbl.class)) {
+                            if (o instanceof JAXBElement && ((JAXBElement<?>)o).getDeclaredType().equals(Tbl.class)) {
                                 /* Find Tr rows, and Tc which then contains P and same substructure */
-                                Object q = ((JAXBElement)o).getValue();
-                                log.info("Value class is: " + q.getClass().getCanonicalName());
+                                Object q = ((JAXBElement<?>)o).getValue();
                                 for (Object to : ((Tbl) q).getContent()) {
-                                    log.info("Class of to is " + to.getClass().getCanonicalName());
                                     if (to instanceof Tr) {
-                                        log.info("Found row");
                                         for (Object tro : ((Tr) to).getContent()) {
-                                            log.info("Class of tro is " + tro.getClass().getCanonicalName());
-                                            if (tro instanceof JAXBElement && ((JAXBElement)tro).getDeclaredType().equals(Tc.class)) {
-                                                log.info("Found tc");
-                                                for (Object tco : ((Tc)((JAXBElement) tro).getValue()).getContent()) {
+                                            if (tro instanceof JAXBElement && ((JAXBElement<?>)tro).getDeclaredType().equals(Tc.class)) {
+                                                for (Object tco : ((Tc)((JAXBElement<?>) tro).getValue()).getContent()) {
                                                     if (tco instanceof P) {
-                                                        log.info("Found P in Tbl");
                                                         processParagraph(((P) tco), firstPara, annotationMap, commentStarted, convertedText, inComment, preCommentText, postCommentText, commentedText, title, titleId);
                                                     }
                                                 }

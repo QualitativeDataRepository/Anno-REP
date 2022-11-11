@@ -262,9 +262,6 @@ public class PdfAnnotationProcessor {
                 // buffer, just the first part
                 if ((start + anchor.length()) <= maxProcessingLength) {
                     log.debug("Adding anchor: " + latestFrag.substring(start, start + anchor.length()));
-                    
-                   
-                    
                     ann.addText(anchor);
                     // If we have the whole anchor, send the end event and add any remaining text in
                     // the first half of the buffer to the annotation
@@ -313,7 +310,7 @@ public class PdfAnnotationProcessor {
             return anchor;
         } else {
             // If the postAnchorText contains the rest of the word (doesn't start with
-            // whitepsace)
+            // whitespace)
             if (!Character.isWhitespace(postAnchorText.charAt(0))) {
                 // Find the last word break
                 int lastWhitespace = StringUtils.lastIndexOfAny(anchor, " ", "\t", "\r", "\n");
@@ -325,7 +322,7 @@ public class PdfAnnotationProcessor {
             }
         }
         if(anchor.length() < initialLength) {
-            log.info("Truncating anchor to " + anchor);
+            log.debug("Truncating anchor to " + anchor);
         }
         return anchor;
     }
