@@ -448,7 +448,7 @@ public class DocumentsService {
 
             // Start an office process and connect to the started instance (on port 2002).
             officeManager.start();
-            File outputFile = new File("./JODCOutput.pdf");
+            File outputFile = File.createTempFile("JODCtemp", ".pdf");
 
             JodConverter
                     .convert(docInputStream)
