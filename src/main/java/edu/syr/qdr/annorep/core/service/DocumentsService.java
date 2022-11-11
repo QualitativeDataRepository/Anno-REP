@@ -11,17 +11,12 @@ import java.io.PipedOutputStream;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.math.BigInteger;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.security.DigestInputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-
-import com.aspose.words.*;
-
 
 import jakarta.json.Json;
 import jakarta.json.JsonArray;
@@ -46,8 +41,6 @@ import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotation;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.pdfbox.text.PDFTextStripperByArea;
-import org.apache.poi.openxml4j.util.ZipSecureFile;
-import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.docx4j.openpackaging.packages.WordprocessingMLPackage;
 import org.docx4j.openpackaging.parts.WordprocessingML.CommentsPart;
 import org.docx4j.openpackaging.parts.WordprocessingML.MainDocumentPart;
@@ -82,12 +75,9 @@ import edu.syr.qdr.annorep.core.repository.DocumentsRepository;
 import edu.syr.qdr.annorep.core.util.Annotation;
 import edu.syr.qdr.annorep.core.util.PdfAnnotationProcessor;
 import edu.syr.qdr.annorep.core.util.StringFragment;
-import fr.opensagres.poi.xwpf.converter.pdf.PdfConverter;
-import fr.opensagres.poi.xwpf.converter.pdf.PdfOptions;
 import lombok.extern.slf4j.Slf4j;
 
 import org.apache.pdfbox.Loader;
-import org.apache.pdfbox.cos.COSArray;
 import org.apache.pdfbox.cos.COSBase;
 import org.apache.pdfbox.cos.COSName;
 
@@ -118,7 +108,7 @@ public class DocumentsService {
     public Documents getDocument(long id) {
         Documents d = null;
         if (documentsRepository.existsById(id)) {
-            d = documentsRepository.getById(id);
+            d = documentsRepository.getReferenceById(id);
         }
         return d;
     }
@@ -223,7 +213,6 @@ public class DocumentsService {
         Map<Integer, String> anchorMap = new HashMap<Integer, String>();
 
         try {
-            ZipSecureFile.setMinInflateRatio(0.001);
             PDDocument document;
             document = Loader.loadPDF(pdfInputStream);
 
@@ -459,61 +448,12 @@ public class DocumentsService {
             
             return new FileInputStream(outputFile);
         } finally {
-            log.info("Done with JODC");
+            log.debug("Done with JODC");
             // Stop the office process
             OfficeUtils.stopQuietly(officeManager);
         }
     }
  
-  
-    private InputStream createPdfFromDocx(InputStream docInputStream) {
-        PipedInputStream pdfInputStream = new PipedInputStream();
-        try {
-            ZipSecureFile.setMinInflateRatio(0.001);
-            new Thread(new Runnable() {
-                public void run() {
-                    try (PipedOutputStream pdfOutputStream = new PipedOutputStream(pdfInputStream)) {
-                        // process for creating pdf started
-                        XWPFDocument document = new XWPFDocument(docInputStream);
-                        PdfOptions options = PdfOptions.getDefault();
-                        PdfConverter.getInstance().convert(document, pdfOutputStream, options);
-
-                    } catch (Exception e) {
-                        log.error("Error creating pdf: " + e.getMessage());
-                        e.printStackTrace();
-                        throw new RuntimeException("Error creating pdf: " + e.getMessage());
-                    }
-                }
-            }).start();
-            // Wait for bytes
-            int i = 0;
-            while (pdfInputStream.available() <= 0 && i < 100) {
-                Thread.sleep(10);
-                i++;
-            }
-            return pdfInputStream;
-        } catch (IOException e) {
-            // TODO Auto-generated catch block
-            try {
-                pdfInputStream.close();
-            } catch (IOException e1) {
-                // TODO Auto-generated catch block
-                e1.printStackTrace();
-            }
-            e.printStackTrace();
-        } catch (InterruptedException e) {
-            // TODO Auto-generated catch block
-            try {
-                pdfInputStream.close();
-            } catch (IOException e1) {
-                // TODO Auto-generated catch block
-                e1.printStackTrace();
-            }
-            e.printStackTrace();
-        }
-        return null;
-    }
-
     private InputStream createAnnotations(Long docId, InputStream docInputStream) {
         PipedInputStream annInputStream = new PipedInputStream();
         try {
@@ -694,7 +634,7 @@ public class DocumentsService {
                         annStr = oldjab.build().toString();
                         // System.out.println("\n\nOld Annotations: " + annStr);
 
-                        // This is getting all text
+                        /* This is getting all text
                         String textNodesXPath = "//w:t";
                         List<Object> textNodes = mainDocumentPart
                                 .getJAXBNodesViaXPath(textNodesXPath, true);
@@ -702,10 +642,7 @@ public class DocumentsService {
                             Text text = (Text) ((JAXBElement<?>) obj).getValue();
                             String textValue = text.getValue();
                             // System.out.println("Whole Text: " + textValue);
-                        }
-                        // System.out.println("Converted text: |" + convertedText.toString() + "|");
-
-                        // PdfConverter.getInstance().convert(document, pdfOutputStream, options);
+                        }*/
 
                     } catch (Exception e) {
                         log.error("Error creating ann: " + e.getMessage());
@@ -750,7 +687,7 @@ public class DocumentsService {
                             annotationMap.get(id).startAnchor();
                             commentStarted.put(id, true);
                             inComment.put(id, true);
-                            log.info("Comment Start: " + id);
+                            log.debug("Comment Start: " + id);
                             // System.out.println("PlainText: " + String.join("", nonCommentTexts));
                             // nonCommentTexts.clear();
                         }
@@ -758,7 +695,7 @@ public class DocumentsService {
                             BigInteger id = ((CommentRangeEnd) po).getId();
                             annotationMap.get(id).endAnchor();
                             inComment.put(id, false);
-                            log.info("Comment End: " + id);
+                            log.debug("Comment End: " + id);
                             // System.out.println("Anchor: " + String.join("", commentTexts));
                             // commentTexts.clear();
                         }
@@ -774,7 +711,7 @@ public class DocumentsService {
                                     // System.out.println(jb.getValue().getClass().getCanonicalName());
                                     if (jb.getValue() instanceof Text) {
                                         String text = ((Text) jb.getValue()).getValue();
-                                        log.info("Found text: " + text);
+                                        log.debug("Found text: " + text);
                                         PPr ppr = para.getPPr();
                                         if (ppr != null) {
                                             PStyle style = ppr.getPStyle();
@@ -798,14 +735,14 @@ public class DocumentsService {
                                             boolean started = commentStarted.get(id);
                                             if (!started) {
                                                 preCommentText.get(id).addString(text);
-                                                log.info("Adding '" + text + "' to preText for" + id);
+                                                log.debug("Adding '" + text + "' to preText for" + id);
                                             } else {
                                                 if (inside) {
                                                     commentedText.get(id).append(text);
-                                                    log.info("Adding '" + text + "' to commentedText for" + id);
+                                                    log.debug("Adding '" + text + "' to commentedText for" + id);
                                                 } else {
                                                     postCommentText.get(id).addString(text);
-                                                    log.info("Adding '" + text + "' to postText for" + id);
+                                                    log.debug("Adding '" + text + "' to postText for" + id);
                                                 }
                                             }
                                         });
@@ -833,8 +770,8 @@ public class DocumentsService {
                     if (style != null) {
                         bold = style.getB() instanceof BooleanDefaultTrue;
                         italic = style.getI() instanceof BooleanDefaultTrue;
-                        System.out.println("Bold?: " + (style.getB() instanceof BooleanDefaultTrue));
-                        System.out.println("Italic?: " + (style.getI() instanceof BooleanDefaultTrue));
+                        log.debug("Bold?: " + (style.getB() instanceof BooleanDefaultTrue));
+                        log.debug("Italic?: " + (style.getI() instanceof BooleanDefaultTrue));
                     }
                     for (Object ro : run.getContent()) {
                         System.out.println("Found ro = " + ro.getClass().getCanonicalName());
@@ -886,9 +823,9 @@ public class DocumentsService {
             }).start();
             // Wait for bytes
             int i = 0;
-            while (annInputStream.available() <= 0 && i < 100) {
+            while (annInputStream.available() <= 0 && i < 25) {
                 System.out.println("Waiting: " + i);
-                Thread.sleep(100);
+                Thread.sleep(500);
                 i++;
             }
             // Path annotationFile = Paths.get("tmp", "annotationFile.json");
