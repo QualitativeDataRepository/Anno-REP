@@ -68,9 +68,13 @@ public class DocumentsController {
         if(d==null && apikey != null) {
             d=documentsService.parseAnnotations(id, apikey, true);
         }
-        if(d!=null) {
-            return new ResponseEntity<String>(d.getTitleAnnotation(), HttpStatus.OK);
-        }else {
+        if (d != null) {
+            if (d.getTitleAnnotation() != null) {
+                return new ResponseEntity<String>(d.getTitleAnnotation(), HttpStatus.OK);
+            } else {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Title was not found");
+            }
+        } else {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Datafile not yet processed");
         }
     }

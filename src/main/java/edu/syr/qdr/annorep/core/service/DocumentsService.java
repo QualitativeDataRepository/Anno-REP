@@ -91,7 +91,7 @@ public class DocumentsService {
     final static String PLACEHOLDER_TEXT = "PLACEHOLDER TEXT";
 
     boolean success = false;
-    
+
     @Autowired
     DataverseService dataverseService;
 
@@ -190,10 +190,12 @@ public class DocumentsService {
             }
             break;
         }
-        d.setConverted(true);
-        d = saveDocument(d);
-        // Report the state prior to successful conversion
-        d.setConverted(false);
+        if (d != null) {
+            d.setConverted(true);
+            d = saveDocument(d);
+            // Report the state prior to successful conversion
+            d.setConverted(false);
+        }
         return d;
 
     }
@@ -257,19 +259,21 @@ public class DocumentsService {
                         // Create an annotation for this highlight comment
                         annMap.put(numHighlights, ann);
                         // Add the comment text
-                      //To get the rich/html text version of an annotation, one has to dig
-                        boolean foundRichText=false;
-                        for(Entry<COSName, COSBase> entry:annot.getCOSObject().entrySet()) {
-                            //Not sure what RC stands for but this is the xhtml version of the text with spans with font sizes, weights, etc. 
-                            if(entry.getKey().getName().equals("RC")) {
-                                String val = ((COSString)entry.getValue()).getString();
-                                //The string has an xml header and a body element, we just want the child nodes in the body
-                                //So convert to an XML representation and then write the children back to a string
+                        // To get the rich/html text version of an annotation, one has to dig
+                        boolean foundRichText = false;
+                        for (Entry<COSName, COSBase> entry : annot.getCOSObject().entrySet()) {
+                            // Not sure what RC stands for but this is the xhtml version of the text with
+                            // spans with font sizes, weights, etc.
+                            if (entry.getKey().getName().equals("RC")) {
+                                String val = ((COSString) entry.getValue()).getString();
+                                // The string has an xml header and a body element, we just want the child nodes
+                                // in the body
+                                // So convert to an XML representation and then write the children back to a
+                                // string
                                 DocumentBuilder builder;
-                                try  
-                                {  
-                                    builder = DocumentBuilderFactory.newInstance().newDocumentBuilder();  
-                                    org.w3c.dom.Document doc = builder.parse( new InputSource( new StringReader( val) ) );
+                                try {
+                                    builder = DocumentBuilderFactory.newInstance().newDocumentBuilder();
+                                    org.w3c.dom.Document doc = builder.parse(new InputSource(new StringReader(val)));
                                     TransformerFactory tf = TransformerFactory.newInstance();
                                     Transformer transformer;
                                     try {
@@ -277,16 +281,18 @@ public class DocumentsService {
                                         // remove XML declaration
                                         transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
                                         StringWriter writer = new StringWriter();
-                                        //Get child nodes
+                                        // Get child nodes
                                         org.w3c.dom.NodeList nl = doc.getElementsByTagName("body").item(0).getChildNodes();
-                                        //Write each to the output string
-                                        for(int n=0;n<nl.getLength();n++ ) {
+                                        // Write each to the output string
+                                        for (int n = 0; n < nl.getLength(); n++) {
                                             transformer.transform(new DOMSource(nl.item(n)), new StreamResult(writer));
                                         }
-                                        //transformer.transform(new DOMSource(doc.getElementsByTagName("body").item(0)), new StreamResult(writer));
+                                        // transformer.transform(new
+                                        // DOMSource(doc.getElementsByTagName("body").item(0)), new
+                                        // StreamResult(writer));
                                         ann.appendCommentText(writer.getBuffer().toString());
-                                        foundRichText=true;
-                                        //log.info("Transformed output: " +output);
+                                        foundRichText = true;
+                                        // log.info("Transformed output: " +output);
                                     } catch (TransformerException e) {
                                         e.printStackTrace();
                                     }
@@ -294,11 +300,11 @@ public class DocumentsService {
                                     log.warn("Exception: Using plain text for annotation");
                                     e.printStackTrace();
                                     ann.appendCommentText(annot.getContents());
-                                } 
+                                }
                                 break;
                             }
                         }
-                        if(!foundRichText) {
+                        if (!foundRichText) {
                             log.warn("Didn't find rich Text for " + annot.getContents());
                             ann.appendCommentText(annot.getContents());
                         }
@@ -425,7 +431,7 @@ public class DocumentsService {
         }
     }
 
-    private InputStream createPdfFromDocxJODC(InputStream docInputStream) throws Exception{
+    private InputStream createPdfFromDocxJODC(InputStream docInputStream) throws Exception {
 
         // Create an office manager using the default configuration.
         // The default port is 2002. Note that when an office manager
@@ -445,7 +451,7 @@ public class DocumentsService {
                     .to(outputFile)
                     .as(DefaultDocumentFormatRegistry.PDF)
                     .execute();
-            
+
             return new FileInputStream(outputFile);
         } finally {
             log.debug("Done with JODC");
@@ -453,7 +459,7 @@ public class DocumentsService {
             OfficeUtils.stopQuietly(officeManager);
         }
     }
- 
+
     private InputStream createAnnotations(Long docId, InputStream docInputStream) {
         PipedInputStream annInputStream = new PipedInputStream();
         try {
@@ -472,6 +478,7 @@ public class DocumentsService {
                     StringBuilder title = new StringBuilder();
                     Map<String, String> commentRelationshipMap = new HashMap<String, String>();
 
+                    //Not used?
                     StringBuilder convertedText = new StringBuilder();
 
                     try (PipedOutputStream annOutputStream = new PipedOutputStream(annInputStream)) {
@@ -481,7 +488,7 @@ public class DocumentsService {
                         MainDocumentPart mainDocumentPart = wordMLPackage
                                 .getMainDocumentPart();
 
-                        //Todo - handle null cPart
+                        // Todo - handle null cPart
                         CommentsPart cPart = mainDocumentPart.getCommentsPart();
                         if (cPart != null) {
                             RelationshipsPart rPart = cPart.getRelationshipsPart(false);
@@ -491,8 +498,8 @@ public class DocumentsService {
                                     List<Relationship> relList = rels.getRelationship();
                                     relList.forEach((Relationship r) -> {
                                         commentRelationshipMap.put(r.getId(), r.getTarget());
-                                        System.out.println("RTarg: " + r.getTarget());
-                                        System.out.println("RId: " + r.getId());
+                                        log.debug("RTarg: " + r.getTarget());
+                                        log.debug("RId: " + r.getId());
                                     });
                                 }
                             }
@@ -505,10 +512,10 @@ public class DocumentsService {
                         commentedText.put(titleId, new StringBuilder());
                         commentText.put(titleId, new StringBuilder(PLACEHOLDER_TEXT));
                         List<Comment> comments = new ArrayList<Comment>();
-                        if(cPart!=null) {
+                        if (cPart != null) {
                             comments = cPart.getContents().getComment();
                         }
-                        
+
                         for (Comment c : comments) {
                             // System.out.println(c.getAuthor());
                             // System.out.println(c.getDate().toString());
@@ -526,27 +533,27 @@ public class DocumentsService {
                                     P para = (P) o;
 
                                     for (Object po : para.getContent()) {
-                                        System.out.println("Found po = " + po.getClass().getCanonicalName());
+                                        log.debug("Found po = " + po.getClass().getCanonicalName());
                                         if (po instanceof JAXBElement) {
                                             JAXBElement<?> jb = (JAXBElement<?>) po;
 
-                                            System.out.println(jb.getName());
-                                            System.out.println(jb.getDeclaredType());
-                                            System.out.println(jb.getValue().getClass().getCanonicalName());
+                                            log.debug(jb.getName().toString());
+                                            log.debug(jb.getDeclaredType().getSimpleName());
+                                            log.debug(jb.getValue().getClass().getCanonicalName());
                                             if (jb.getValue() instanceof Hyperlink) {
 
-                                                System.out.println("Found hyperlink");
+                                                log.debug("Found hyperlink");
                                                 Hyperlink link = (Hyperlink) jb.getValue();
-                                                System.out.println("Id: " + link.getId());
-                                                System.out.println("TgtFr: " + link.getTgtFrame());
-                                                System.out.println("TTip: " + link.getTooltip());
-                                                System.out.println("Str: " + link.toString());
-                                                System.out.println("Anchor: " + link.getAnchor());
-                                                System.out.println("Loc: " + link.getDocLocation());
+                                                log.debug("Id: " + link.getId());
+                                                log.debug("TgtFr: " + link.getTgtFrame());
+                                                log.debug("TTip: " + link.getTooltip());
+                                                log.debug("Str: " + link.toString());
+                                                log.debug("Anchor: " + link.getAnchor());
+                                                log.debug("Loc: " + link.getDocLocation());
                                                 for (Object lo : link.getContent()) {
                                                     if (lo instanceof R) {
 
-                                                        System.out.println("HL text: " + getStyedTextFromRun((R) lo));
+                                                        log.debug("HL text: " + getStyedTextFromRun((R) lo));
 
                                                         String htmlLink = "<a href=\"" + commentRelationshipMap.get(link.getId()) + "\">" + getStyedTextFromRun((R) lo) + "</a>";
                                                         annotationMap.get(id).appendCommentText(htmlLink);
@@ -576,17 +583,20 @@ public class DocumentsService {
                             commentStarted.put(id, false);
                         });
                         boolean firstPara = true;
+                        int paraCount = 1;
                         for (Object o : mainDocumentPart.getContent()) {
-                            if (o instanceof JAXBElement && ((JAXBElement<?>)o).getDeclaredType().equals(Tbl.class)) {
+                            if (o instanceof JAXBElement && ((JAXBElement<?>) o).getDeclaredType().equals(Tbl.class)) {
                                 /* Find Tr rows, and Tc which then contains P and same substructure */
-                                Object q = ((JAXBElement<?>)o).getValue();
+                                Object q = ((JAXBElement<?>) o).getValue();
                                 for (Object to : ((Tbl) q).getContent()) {
                                     if (to instanceof Tr) {
                                         for (Object tro : ((Tr) to).getContent()) {
-                                            if (tro instanceof JAXBElement && ((JAXBElement<?>)tro).getDeclaredType().equals(Tc.class)) {
-                                                for (Object tco : ((Tc)((JAXBElement<?>) tro).getValue()).getContent()) {
+                                            if (tro instanceof JAXBElement && ((JAXBElement<?>) tro).getDeclaredType().equals(Tc.class)) {
+                                                for (Object tco : ((Tc) ((JAXBElement<?>) tro).getValue()).getContent()) {
                                                     if (tco instanceof P) {
-                                                        processParagraph(((P) tco), firstPara, annotationMap, commentStarted, convertedText, inComment, preCommentText, postCommentText, commentedText, title, titleId);
+                                                        //Won't look for title in tables
+                                                        processParagraph(((P) tco), firstPara, false, annotationMap, commentStarted, convertedText, inComment, preCommentText, postCommentText, commentedText, title, titleId);
+                                                        firstPara = false;
                                                     }
                                                 }
                                             }
@@ -596,16 +606,22 @@ public class DocumentsService {
                             }
                             if (o instanceof P) {
                                 P para = (P) o;
-                                processParagraph(para, firstPara, annotationMap, commentStarted, convertedText, inComment, preCommentText, postCommentText, commentedText, title, titleId);
+                                //Look for para in first five paragraphs only 
+                                processParagraph(para, firstPara, (paraCount < 5), annotationMap, commentStarted, convertedText, inComment, preCommentText, postCommentText, commentedText, title, titleId);
+                                firstPara = false;
+                                paraCount++;
                             }
-
+                            
                         }
                         JsonArrayBuilder jab = Json.createArrayBuilder();
                         final String theTitle = title.toString();
 
                         // ToDo - could write the annotations/title to the Document now, but we're in a
                         // thread with no context
-
+                        if(annotationMap.get(titleId).getDocTitle()== null) {
+                            //We didn't find a title, so don't add a placeholder ann
+                            annotationMap.remove(titleId);
+                        }
                         annotationMap.entrySet().forEach(entry -> {
                             entry.getValue().setDocUri(dataverseService.getPdfUrl(docId));
                             jab.add(entry.getValue().getJson());
@@ -634,15 +650,13 @@ public class DocumentsService {
                         annStr = oldjab.build().toString();
                         // System.out.println("\n\nOld Annotations: " + annStr);
 
-                        /* This is getting all text
-                        String textNodesXPath = "//w:t";
-                        List<Object> textNodes = mainDocumentPart
-                                .getJAXBNodesViaXPath(textNodesXPath, true);
-                        for (Object obj : textNodes) {
-                            Text text = (Text) ((JAXBElement<?>) obj).getValue();
-                            String textValue = text.getValue();
-                            // System.out.println("Whole Text: " + textValue);
-                        }*/
+                        /*
+                         * This is getting all text String textNodesXPath = "//w:t"; List<Object>
+                         * textNodes = mainDocumentPart .getJAXBNodesViaXPath(textNodesXPath, true); for
+                         * (Object obj : textNodes) { Text text = (Text) ((JAXBElement<?>)
+                         * obj).getValue(); String textValue = text.getValue(); //
+                         * System.out.println("Whole Text: " + textValue); }
+                         */
 
                     } catch (Exception e) {
                         log.error("Error creating ann: " + e.getMessage());
@@ -651,7 +665,10 @@ public class DocumentsService {
                     }
                 }
 
-                private void processParagraph(P para, boolean firstPara, Map<BigInteger, Annotation> annotationMap, Map<BigInteger, Boolean> commentStarted, StringBuilder convertedText, Map<BigInteger, Boolean> inComment, Map<BigInteger, StringFragment> preCommentText, Map<BigInteger, StringFragment> postCommentText, Map<BigInteger, StringBuilder> commentedText, StringBuilder title, BigInteger titleId) {
+                private void processParagraph(P para, boolean firstPara, boolean lookForTitle, Map<BigInteger, Annotation> annotationMap, Map<BigInteger, Boolean> commentStarted, StringBuilder convertedText, Map<BigInteger, Boolean> inComment, Map<BigInteger, StringFragment> preCommentText, Map<BigInteger, StringFragment> postCommentText, Map<BigInteger, StringBuilder> commentedText, StringBuilder title, BigInteger titleId) {
+                    //ToDo - this was disabled. Now, ann.addText removed \n so this has no effect there. It would be added to the pre/in/post entries but that would make them inconsistent with the overall char count.
+                    //Commenting it out until there's evidence that adding \n\n is needed to be consistent with Hypothesis.
+                    /*
                     final String paraSep = "\n\n";
                     if (!firstPara) {
                         annotationMap.values().forEach(ann -> {
@@ -664,20 +681,39 @@ public class DocumentsService {
                             boolean started = commentStarted.get(id);
                             if (!started) {
                                 preCommentText.get(id).addString(paraSep);
-                                // System.out.println("Adding '" + paraSep + "' to preText for" + id);
+                                 System.out.println("Adding '" + paraSep + "' to preText for" + id);
                             } else {
                                 if (inside) {
                                     commentedText.get(id).append(paraSep);
-                                    // System.out.println("Adding '" + paraSep + "' to commentedText for" + id);
+                                     System.out.println("Adding '" + paraSep + "' to commentedText for" + id);
                                 } else {
                                     postCommentText.get(id).addString(paraSep);
-                                    // System.out.println("Adding '" + paraSep + "' to postText for" + id);
+                                     System.out.println("Adding '" + paraSep + "' to postText for" + id);
                                 }
                             }
                         });
+                    }
+                    */
+                    BooleanDefaultTrue bdt = para.getPPr().getRPr().getB();
+                    boolean bold =  bdt==null? false:bdt.isVal();
+                    boolean largeFont = para.getPPr().getRPr().getSz().getVal().intValue() >=32;
+                    log.debug("Looking?: " + lookForTitle);
+                    log.debug("Para is bold?: " + para.getPPr().getRPr().getB());
+                    log.debug("Para Hps: " + para.getPPr().getRPr().getSz().getVal());
+                    boolean multirun = false;
+                    int rCounter = 0;
+                    if (lookForTitle && title.length() == 0) {
+                        for (Object po : para.getContent()) {
 
-                    } else {
-                        firstPara = false;
+                            if (po instanceof R) {
+
+                                rCounter++;
+                            }
+                            if (rCounter == 2) {
+                                multirun = true;
+                                break;
+                            }
+                        }
                     }
                     for (Object po : para.getContent()) {
                         // System.out.println("PO: " + po.getClass().getCanonicalName());
@@ -715,10 +751,28 @@ public class DocumentsService {
                                         PPr ppr = para.getPPr();
                                         if (ppr != null) {
                                             PStyle style = ppr.getPStyle();
-                                            // System.out.println("ParaStyle: " + style.getVal());
-                                            if (style != null && style.getVal().equals("Heading1") && title.length() == 0) {
+                                            
+                                            if (annotationMap.get(titleId).getDocTitle() == null) {
+                                                if (((R) po).getRPr().getB() != null) {
+                                                    log.debug("Bold?: " + ((R) po).getRPr().getB().isVal());
+                                                }if (((R) po).getRPr().getSz() != null) {
+                                                    log.debug("Size: " + ((R) po).getRPr().getSz().getVal());
+                                                }
+                                                if (style != null) {
+                                                    log.debug("ParaStyle: " + style.getClass().getCanonicalName() + " : " + style.getVal());
+                                                }
+                                            }
+                                            /*
+                                             * Heuristics to find title:
+                                             *  First paragraph
+                                             *  * styled as Heading 1
+                                             *  * is bold or in a font >= 16 pt and either the text in the run in >20 chars or there are multiple runs
+                                             *  
+                                             *  Assumes the title is always in one paragraph (not split)
+                                             *  
+                                             */
+                                            if (lookForTitle && ((style != null && (style.getVal().equals("Heading1"))) || ((bold||largeFont) && ((text.length() > 20) || multirun))) && annotationMap.get(titleId).getDocTitle() == null) {
                                                 title.append(text);
-                                                annotationMap.values().forEach(ann -> ann.setDocTitle(text));
                                                 annotationMap.get(titleId).startAnchor();
                                                 commentStarted.put(titleId, true);
                                                 inComment.put(titleId, true);
@@ -746,10 +800,7 @@ public class DocumentsService {
                                                 }
                                             }
                                         });
-                                        if (title != null) {
-                                            annotationMap.get(titleId).endAnchor();
-                                            inComment.put(titleId, false);
-                                        }
+
                                         /*
                                          * if (inComment) { commentTexts.add(((Text) jb.getValue()).getValue()); } else
                                          * { nonCommentTexts.add(((Text) jb.getValue()).getValue()); }
@@ -758,6 +809,15 @@ public class DocumentsService {
                                 }
                             }
                         }
+                    }
+                    //At the end of a paragraph, if we don't yet have a title, see if there is one
+                    if (annotationMap.get(titleId).getDocTitle() == null && title.length() != 0) {
+                        //If so, finish the placeholder annotation for it and add the title to all the other annotations 
+                        annotationMap.get(titleId).endAnchor();
+                        inComment.put(titleId, false);
+                        String dTitle = title.toString();
+                        System.out.println("Adding title to anns: " + dTitle);
+                        annotationMap.values().forEach(ann -> ann.setDocTitle(dTitle));
                     }
                 }
 
@@ -774,22 +834,22 @@ public class DocumentsService {
                         log.debug("Italic?: " + (style.getI() instanceof BooleanDefaultTrue));
                     }
                     for (Object ro : run.getContent()) {
-                        System.out.println("Found ro = " + ro.getClass().getCanonicalName());
+                        log.debug("Found ro = " + ro.getClass().getCanonicalName());
                         if (ro instanceof Br) {
                             val = val + "\n";
                         }
                         if (ro instanceof JAXBElement) {
                             JAXBElement<?> jb = (JAXBElement<?>) ro;
 
-                            System.out.println(jb.getName());
+                            log.debug(jb.getName().toString());
                             // System.out.println(jb.getDeclaredType());
                             // System.out.println(jb.getValue().getClass().getCanonicalName());
                             // System.out.println(jb.getValue());
                             if (jb.getValue() instanceof Text) {
                                 Text t = (Text) jb.getValue();
 
-                                System.out.println(t.getSpace());
-                                System.out.println(t.getValue());
+                                log.debug(t.getSpace());
+                                log.debug(t.getValue());
                                 // System.out.println((long)t.getValue().charAt(1));
                                 val = t.getValue();
                                 if (bold) {
@@ -825,7 +885,7 @@ public class DocumentsService {
             int i = 0;
             while (annInputStream.available() <= 0 && i < 25) {
                 System.out.println("Waiting: " + i);
-                Thread.sleep(500);
+                Thread.sleep(2000);
                 i++;
             }
             // Path annotationFile = Paths.get("tmp", "annotationFile.json");
@@ -877,9 +937,9 @@ public class DocumentsService {
 
     public Documents parseAnnotations(Long id, String apikey, boolean force) {
         Documents d = getDocument(id);
-        if(d==null) {
+        if (d == null) {
             try {
-            d=retrieveDocFor(id, apikey);
+                d = retrieveDocFor(id, apikey);
             } catch (Exception e) {
                 log.debug("Couldn't retrieve file id: " + id + ": " + e.getMessage());
             }
@@ -888,10 +948,12 @@ public class DocumentsService {
             try {
                 JsonArray response = dataverseService.getAPIJsonResponse(dataverseService.getAnnPath(id), apikey).asJsonArray();
                 log.debug(response.toString());
-                d.setTitleAnnotation(response.get(0).toString());
                 JsonArrayBuilder jab = Json.createArrayBuilder(response);
-
-                jab.remove(0);
+                //If the doc title is set (in any/all annotations), we know the title was found and the first annotation is a placeholder that needs to be handled separately
+                if (response.get(0).asJsonObject().get("document").asJsonObject().containsKey("title")) {
+                    d.setTitleAnnotation(response.get(0).toString());
+                    jab.remove(0);
+                }
                 JsonArray ja = jab.build();
                 d.setAnnotations(ja.toString());
                 d = saveDocument(d);
