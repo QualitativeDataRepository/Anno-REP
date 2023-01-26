@@ -527,11 +527,12 @@ public class DocumentsService {
                             postCommentText.put(id, new StringFragment(ANCHOR_SIZE, false));
                             commentedText.put(id, new StringBuilder());
                             commentText.put(id, new StringBuilder());
+                            boolean firstPara=true;
                             for (Object o : c.getContent()) {
                                 // System.out.println("Found o = " + o.getClass().getCanonicalName());
                                 if (o instanceof P) {
                                     P para = (P) o;
-
+                                    boolean firstRun=true;
                                     for (Object po : para.getContent()) {
                                         log.debug("Found po = " + po.getClass().getCanonicalName());
                                         if (po instanceof JAXBElement) {
@@ -552,9 +553,13 @@ public class DocumentsService {
                                                 log.debug("Loc: " + link.getDocLocation());
                                                 for (Object lo : link.getContent()) {
                                                     if (lo instanceof R) {
-
                                                         log.debug("HL text: " + getStyedTextFromRun((R) lo));
-
+                                                        if(!firstPara && firstRun) {
+                                                            log.debug("adding a break");
+                                                            commentText.get(id).append("<br>");
+                                                            annotationMap.get(id).appendCommentText("<br>");
+                                                            firstRun=false;
+                                                        }
                                                         String htmlLink = "<a href=\"" + commentRelationshipMap.get(link.getId()) + "\">" + getStyedTextFromRun((R) lo) + "</a>";
                                                         annotationMap.get(id).appendCommentText(htmlLink);
                                                         commentText.get(id).append(htmlLink);
@@ -564,14 +569,23 @@ public class DocumentsService {
                                         }
 
                                         if (po instanceof R) {
+                                            if(!firstPara && firstRun) {
+                                                log.debug("adding a break");
+                                                commentText.get(id).append("<br>");
+                                                annotationMap.get(id).appendCommentText("<br>");
+                                                firstRun=false;
+                                            }
                                             String styledText = getStyedTextFromRun((R) po);
+                                            log.debug("Adding " + styledText);
                                             annotationMap.get(id).appendCommentText(styledText);
                                             commentText.get(id).append(styledText);
 
                                         }
                                     }
-                                    // System.out.println("Comment # " + id + ": " +
-                                    // commentText.get(id).toString());
+                                    firstPara=false;
+
+                                    //System.out.println("Comment # " + id + ": " +
+                                    //commentText.get(id).toString());
                                 }
                             }
                         }
@@ -694,12 +708,19 @@ public class DocumentsService {
                         });
                     }
                     */
-                    BooleanDefaultTrue bdt = para.getPPr().getRPr().getB();
-                    boolean bold =  bdt==null? false:bdt.isVal();
-                    boolean largeFont = para.getPPr().getRPr().getSz().getVal().intValue() >=32;
-                    log.debug("Looking?: " + lookForTitle);
-                    log.debug("Para is bold?: " + para.getPPr().getRPr().getB());
-                    log.debug("Para Hps: " + para.getPPr().getRPr().getSz().getVal());
+                    boolean bold = false;
+                    boolean largeFont=false;
+                    if (para.getPPr().getRPr() != null) {
+                        BooleanDefaultTrue bdt = para.getPPr().getRPr().getB();
+                        bold = bdt == null ? false : bdt.isVal();
+                        if(para.getPPr().getRPr().getSz()!=null) {
+                            largeFont = para.getPPr().getRPr().getSz().getVal().intValue() >= 32;
+                            log.debug("Para Hps: " + para.getPPr().getRPr().getSz().getVal());
+                        }
+                        log.debug("Looking?: " + lookForTitle);
+                        log.debug("Para is bold?: " + para.getPPr().getRPr().getB());
+                        
+                    }
                     boolean multirun = false;
                     int rCounter = 0;
                     if (lookForTitle && title.length() == 0) {
@@ -753,10 +774,13 @@ public class DocumentsService {
                                             PStyle style = ppr.getPStyle();
                                             
                                             if (annotationMap.get(titleId).getDocTitle() == null) {
-                                                if (((R) po).getRPr().getB() != null) {
-                                                    log.debug("Bold?: " + ((R) po).getRPr().getB().isVal());
-                                                }if (((R) po).getRPr().getSz() != null) {
-                                                    log.debug("Size: " + ((R) po).getRPr().getSz().getVal());
+                                                if (log.isDebugEnabled() && ((R) po).getRPr() != null) {
+                                                    if (((R) po).getRPr().getB() != null) {
+                                                        log.debug("Bold?: " + ((R) po).getRPr().getB().isVal());
+                                                    }
+                                                    if (((R) po).getRPr().getSz() != null) {
+                                                        log.debug("Size: " + ((R) po).getRPr().getSz().getVal());
+                                                    }
                                                 }
                                                 if (style != null) {
                                                     log.debug("ParaStyle: " + style.getClass().getCanonicalName() + " : " + style.getVal());
