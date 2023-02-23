@@ -710,7 +710,7 @@ public class DocumentsService {
                     */
                     boolean bold = false;
                     boolean largeFont=false;
-                    if (para.getPPr().getRPr() != null) {
+                    if (para.getPPr() != null && para.getPPr().getRPr() != null) {
                         BooleanDefaultTrue bdt = para.getPPr().getRPr().getB();
                         bold = bdt == null ? false : bdt.isVal();
                         if(para.getPPr().getRPr().getSz()!=null) {
