@@ -121,6 +121,10 @@ public class DocumentsService {
         log.info("Converting: " + id);
         Documents d = getDocument(id);
         log.debug(id + " exists? :" + (d != null));
+        if(d!=null) {
+            log.debug("Is converted? " + d.isConverted());
+        
+        }
         // log.debug(id + " exists? :" + documentsRepository.existsById(id));
 
         /*
@@ -139,9 +143,11 @@ public class DocumentsService {
 
             try {
                 JsonArray response = dataverseService.getAPIJsonResponse("/api/access/datafile/" + id + "/auxiliary/AnnoRep", apikey).asJsonObject().getJsonArray("data");
-                JsonValue auxObj = response.stream().filter((item -> item.asJsonObject().getString("formatVersion").equals("v1.0"))).findFirst().orElse(null);
-                if (auxObj != null) {
-                    d.setConverted(true);
+                if (response != null) {
+                    JsonValue auxObj = response.stream().filter((item -> item.asJsonObject().getString("formatVersion").equals("v1.0"))).findFirst().orElse(null);
+                    if (auxObj != null) {
+                        d.setConverted(true);
+                    }
                 }
             } catch (Exception e) {
                 // No cached object and can't get find the datafile with this id
@@ -152,9 +158,11 @@ public class DocumentsService {
             saveDocument(d);
         }
         if (d == null) {
+            log.debug("Doc is null");
             return null;
         }
         if (d.isConverted()) {
+            log.debug("Doc is converted");
             return d;
         }
 
@@ -189,6 +197,8 @@ public class DocumentsService {
                 e.printStackTrace();
             }
             break;
+        case default: 
+            log.warn("Used for file with mimetype: " + d.getMimetype());
         }
         if (d != null) {
             d.setConverted(true);
@@ -620,7 +630,7 @@ public class DocumentsService {
                             }
                             if (o instanceof P) {
                                 P para = (P) o;
-                                //Look for para in first five paragraphs only 
+                                //Look for title in first five paragraphs only 
                                 processParagraph(para, firstPara, (paraCount < 5), annotationMap, commentStarted, convertedText, inComment, preCommentText, postCommentText, commentedText, title, titleId);
                                 firstPara = false;
                                 paraCount++;
@@ -971,15 +981,19 @@ public class DocumentsService {
         if (d != null && (d.isConverted() == true || force)) {
             try {
                 JsonArray response = dataverseService.getAPIJsonResponse(dataverseService.getAnnPath(id), apikey).asJsonArray();
-                log.debug(response.toString());
-                JsonArrayBuilder jab = Json.createArrayBuilder(response);
-                //If the doc title is set (in any/all annotations), we know the title was found and the first annotation is a placeholder that needs to be handled separately
-                if (response.get(0).asJsonObject().get("document").asJsonObject().containsKey("title")) {
-                    d.setTitleAnnotation(response.get(0).toString());
-                    jab.remove(0);
+                if (response != null) {
+                    log.debug(response.toString());
+
+                    JsonArrayBuilder jab = Json.createArrayBuilder(response);
+                    // If the doc title is set (in any/all annotations), we know the title was found
+                    // and the first annotation is a placeholder that needs to be handled separately
+                    if (response.size()> 0 && response.get(0).asJsonObject().get("document").asJsonObject().containsKey("title")) {
+                        d.setTitleAnnotation(response.get(0).toString());
+                        jab.remove(0);
+                    }
+                    JsonArray ja = jab.build();
+                    d.setAnnotations(ja.toString());
                 }
-                JsonArray ja = jab.build();
-                d.setAnnotations(ja.toString());
                 d = saveDocument(d);
             } catch (Exception e) {
                 // Class cast - 404 returns a jsonObject rather than Array
