@@ -211,7 +211,13 @@ public class DocumentsService {
     }
 
     private Documents retrieveDocFor(Long id, String apikey) throws Exception {
-        String mimetype = dataverseService.getAPIJsonResponse("/api/search?q=identifier:" + id, apikey).asJsonObject().getJsonObject("data").getJsonArray("items").getJsonObject(0).getString("file_content_type");
+        String mimetype = null;
+        JsonArray items = dataverseService.getAPIJsonResponse("/api/search?q=identifier:" + id, apikey).asJsonObject().getJsonObject("data").getJsonArray("items");
+        if(items.size()>0) {
+            mimetype = items.getJsonObject(0).getString("file_content_type");
+        } else {
+            throw new Exception("Document with id " + id + " not found with \"/api/search?q=identifier:" + id + "\"");
+        }
         Documents d = new Documents();
         d.setId(id);
         d.setConverted(false);
