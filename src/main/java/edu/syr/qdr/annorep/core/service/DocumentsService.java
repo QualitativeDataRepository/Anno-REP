@@ -21,6 +21,7 @@ import java.util.Map.Entry;
 import jakarta.json.Json;
 import jakarta.json.JsonArray;
 import jakarta.json.JsonArrayBuilder;
+import jakarta.json.JsonObject;
 import jakarta.json.JsonObjectBuilder;
 import jakarta.json.JsonValue;
 import javax.xml.bind.JAXBElement;
@@ -197,7 +198,7 @@ public class DocumentsService {
                 e.printStackTrace();
             }
             break;
-        case default: 
+        default: 
             log.warn("Used for file with mimetype: " + d.getMimetype());
         }
         if (d != null) {
@@ -212,12 +213,9 @@ public class DocumentsService {
 
     private Documents retrieveDocFor(Long id, String apikey) throws Exception {
         String mimetype = null;
-        JsonArray items = dataverseService.getAPIJsonResponse("/api/search?q=identifier:" + id, apikey).asJsonObject().getJsonObject("data").getJsonArray("items");
-        if(items.size()>0) {
-            mimetype = items.getJsonObject(0).getString("file_content_type");
-        } else {
-            throw new Exception("Document with id " + id + " not found with \"/api/search?q=identifier:" + id + "\"");
-        }
+        JsonObject dataFile = dataverseService.getAPIJsonResponse("/api/files/" + id, apikey).asJsonObject().getJsonObject("data").getJsonObject("dataFile");
+        mimetype = dataFile.getString("contentType");
+        
         Documents d = new Documents();
         d.setId(id);
         d.setConverted(false);
